@@ -1,0 +1,11 @@
+{
+  "task_id": "local-task-001",
+  "case_text": "fever, cough, chest discomfort",
+  "question": "What diseases should be considered?",
+  "patient_id": "p001",
+  "doctor_id": "d001",
+  "language": "zh-CN",
+  "metadata": {
+    "source": "local-example"
+  }
+}

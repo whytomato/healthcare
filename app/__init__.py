@@ -1,0 +1,1 @@
+"""Healthcare Python application package."""
