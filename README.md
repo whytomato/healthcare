@@ -17,7 +17,7 @@ flowchart TD
     C --> IQ[信息质量分支]
     C --> KR[知识检索分支]
     C --> CR[候选推理分支]
-    C --> CO[一致性检查分支]
+    C --> CO[证据审查与一致性分支]
     C --> SR[安全风险分支]
 
     IQ --> U[UncertaintyAssessmentAgent<br/>不确定性汇总]
@@ -26,7 +26,7 @@ flowchart TD
     MK --> RQ[RetrievalQualityAgent<br/>证据质量判断]
     RQ --> U
 
-    RQ -- evidence_missing --> SKIP[跳过候选推理和一致性分支]
+    RQ -- evidence_missing --> SKIP[跳过候选推理和一致性相关 agent]
     SKIP --> U
 
     CR --> DD[DifferentialDiagnosisAgent<br/>候选诊断推理]
@@ -34,17 +34,27 @@ flowchart TD
     CS --> U
 
     CO --> ER[EvidenceReviewAgent<br/>证据审查]
-    ER --> SC
-    ER --> RP
+    MK --> ER
+    DD --> ER
+    ER --> SC[SafetyCheckAgent<br/>红旗风险检查]
+    ER --> RP[ReportAgent<br/>报告生成]
+
     MK --> RC[RagLlmConsistencyAgent<br/>RAG 与 LLM 一致性]
     DD --> RC
     RC --> U
 
-    SR --> SC[SafetyCheckAgent<br/>红旗风险检查]
+    SR --> SC
     SC --> U
 
-    U --> RP[ReportAgent<br/>报告生成]
+    U --> RP
     RP --> OUT[完整 workflow JSON]
+
+    subgraph MockReplay[Scenario replay 中的替换]
+      SMK[ScenarioMedicalKnowledgeAgent<br/>固定 mock_rag_documents]
+      SDD[ScenarioDifferentialDiagnosisAgent<br/>固定 mock_llm_output]
+      SER[ScenarioEvidenceReviewAgent<br/>不调用真实 LLM]
+      SRP[ScenarioReportAgent<br/>不调用真实 LLM]
+    end
 ```
 
 当前显式建模的不确定性类型：
