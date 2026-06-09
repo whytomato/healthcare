@@ -28,7 +28,27 @@ class SafetyCheckAgent(Agent):
         evidence_result = self.previous_result(previous, "evidence_review_agent")
 
         if not symptom_result or symptom_result.status != "ready":
-            return self.needs_data("Safety check requires SymptomExtractionAgent output.")
+            return self.ready(
+                summary="Safety red-flag check completed with incomplete symptom extraction.",
+                recommendations=[
+                    "No normalized symptoms were available; collect missing case details before full analysis."
+                ],
+                data={
+                    "used_previous_agents": [
+                        "symptom_extraction_agent_missing",
+                        (
+                            "differential_diagnosis_agent"
+                            if differential_result
+                            else "differential_diagnosis_agent_missing"
+                        ),
+                        "evidence_review_agent" if evidence_result else "evidence_review_agent_missing",
+                    ],
+                    "red_flags": [],
+                    "limited_by_incomplete_input": True,
+                    "handoff_to": ["report_agent"],
+                },
+                confidence=0.3,
+            )
 
         symptoms = symptom_result.data.get("symptom_candidates", [])
         text = " ".join([context.case_text, *[str(item) for item in symptoms]]).lower()

@@ -1,0 +1,437 @@
+[
+  {
+    "name": "test_missing_evidence_1",
+    "case_text": "A 45-year-old female presents with migratory joint pain, low-grade fever, and malaise for 3 weeks. No skin rash or neurological symptoms. Lab tests show elevated ESR and CRP, but negative rheumatoid factor and anti-CCP. The primary differential includes seronegative rheumatoid arthritis vs. viral arthralgia. The clinician queries the system for diagnostic recommendations.",
+    "mock_rag_documents": [
+      {
+        "disease": "Rheumatoid Arthritis",
+        "retrieval_score": 0.3
+      },
+      {
+        "disease": "Viral Arthralgia",
+        "retrieval_score": 0.2
+      }
+    ],
+    "mock_llm_output": "Based on the available information, the differential diagnosis includes seronegative rheumatoid arthritis and viral arthralgia. However, there is insufficient evidence to confidently differentiate between these conditions. Additional testing such as synovial fluid analysis or viral serologies may be required. The current evidence is missing.",
+    "expected_uncertainties": [
+      "missing_evidence"
+    ]
+  },
+  {
+    "name": "Weak Evidence Trigger_2",
+    "case_text": "A 45-year-old female presents with a 3-month history of widespread joint pain, severe fatigue, and a faint malar rash. She reports intermittent low-grade fevers. Initial lab work reveals a positive ANA at 1:160 and a mildly elevated ESR. A review of systems is otherwise unremarkable.",
+    "mock_rag_documents": [
+      {
+        "disease": "Systemic Lupus Erythematosus",
+        "retrieval_score": 0.321
+      },
+      {
+        "disease": "Fibromyalgia",
+        "retrieval_score": 0.892
+      },
+      {
+        "disease": "Rheumatoid Arthritis",
+        "retrieval_score": 0.215
+      }
+    ],
+    "mock_llm_output": "Based on the presented symptoms of joint pain, fatigue, malar rash, and positive ANA, the most likely diagnosis is Systemic Lupus Erythematosus (SLE). However, the supporting evidence from the knowledge base is of low quality. The recommended specialty referral is Rheumatology.",
+    "expected_uncertainties": [
+      "weak_evidence"
+    ]
+  },
+  {
+    "name": "Diabetes vs Hypothyroidism Diagnostic Conflict_3",
+    "case_text": "A 45-year-old female presents with a 3-month history of progressive fatigue, unexplained weight gain of 5 kg, dry skin, constipation, and intermittent tingling in her fingers. Fasting blood glucose is 126 mg/dL, and TSH is 6.5 mIU/L. Two agents analyze the case: Agent X diagnoses Type 2 Diabetes based on glucose; Agent Y diagnoses Hypothyroidism based on TSH and symptoms. Conflict arises.",
+    "mock_rag_documents": [
+      {
+        "disease": "Type 2 Diabetes Mellitus",
+        "retrieval_score": 0.92
+      },
+      {
+        "disease": "Hypothyroidism",
+        "retrieval_score": 0.91
+      }
+    ],
+    "mock_llm_output": "The patient's lab results and symptoms are consistent with both Type 2 Diabetes Mellitus and Hypothyroidism. Agent X argues for diabetes due to elevated fasting glucose, while Agent Y points to elevated TSH and classic hypothyroid symptoms. The differential diagnosis includes both conditions, leading to agent conflict.",
+    "expected_uncertainties": [
+      "agent_conflict"
+    ]
+  },
+  {
+    "name": "Unsupported Candidate Test_4",
+    "case_text": "A 45-year-old male presents with fever, cough, and fatigue for 5 days. Chest X-ray shows bilateral infiltrates.",
+    "mock_rag_documents": [
+      {
+        "disease": "COVID-19",
+        "retrieval_score": 0.95
+      },
+      {
+        "disease": "Influenza",
+        "retrieval_score": 0.88
+      },
+      {
+        "disease": "Bacterial Pneumonia",
+        "retrieval_score": 0.82
+      }
+    ],
+    "mock_llm_output": "The patient's symptoms are consistent with COVID-19 or Tuberculosis. Tuberculosis is a possible diagnosis given the chronic nature of the cough.",
+    "expected_uncertainties": [
+      {
+        "type": "unsupported_candidate",
+        "candidate": "Tuberculosis",
+        "reason": "The candidate disease 'Tuberculosis' is not supported by the provided RAG documents, which only include COVID-19, Influenza, and Bacterial Pneumonia."
+      }
+    ]
+  },
+  {
+    "name": "Acute Chest Pain Urgent Risk_5",
+    "case_text": "Patient: 65-year-old male with sudden onset crushing substernal chest pain radiating to left arm, accompanied by diaphoresis and shortness of breath. Pain started 1 hour ago. History of hypertension and hyperlipidemia.",
+    "mock_rag_documents": [
+      {
+        "disease": "Myocardial Infarction",
+        "retrieval_score": 0.95
+      },
+      {
+        "disease": "Pulmonary Embolism",
+        "retrieval_score": 0.75
+      },
+      {
+        "disease": "Aortic Dissection",
+        "retrieval_score": 0.65
+      }
+    ],
+    "mock_llm_output": "Based on the presentation, this could be an acute myocardial infarction. Immediate action required: transfer to emergency department, obtain ECG, cardiac enzymes (troponin), and consider urgent cardiology consultation. Rule out aortic dissection if blood pressure differential present.",
+    "expected_uncertainties": [
+      "urgent_risk"
+    ]
+  },
+  {
+    "name": "Rare Disease Missing Evidence_6",
+    "case_text": "A 45-year-old female presents with progressive proximal muscle weakness, heliotrope rash, and mechanic's hands. She reports dysphagia and mild dyspnea on exertion. Lab work reveals elevated CK levels and positive anti-Jo-1 antibodies. She has no prior diagnosis.",
+    "mock_rag_documents": [
+      {
+        "disease": "Polymyositis",
+        "retrieval_score": 0.25
+      },
+      {
+        "disease": "Dermatomyositis",
+        "retrieval_score": 0.3
+      },
+      {
+        "disease": "Inclusion Body Myositis",
+        "retrieval_score": 0.1
+      }
+    ],
+    "mock_llm_output": "Based on the provided information and low retrieval scores, I cannot find sufficient evidence in the knowledge base to confirm a specific diagnosis. The symptoms suggest an inflammatory myopathy, but missing evidence prevents a definitive conclusion.",
+    "expected_uncertainties": [
+      "missing_evidence"
+    ]
+  },
+  {
+    "name": "Weak Evidence Scenario_7",
+    "case_text": "A 45-year-old female presents with fatigue, joint pain, and occasional low-grade fever. Lab results show mild anemia and elevated ESR. No specific diagnostic markers.",
+    "mock_rag_documents": [
+      {
+        "disease": "Rheumatoid Arthritis",
+        "retrieval_score": 0.45
+      },
+      {
+        "disease": "Lupus",
+        "retrieval_score": 0.32
+      },
+      {
+        "disease": "Fibromyalgia",
+        "retrieval_score": 0.28
+      }
+    ],
+    "mock_llm_output": "Based on the provided evidence, the symptoms could be indicative of an autoimmune condition, but the evidence is weak. The top retrieved documents have low relevance scores, making it difficult to confirm a specific diagnosis. Further tests are recommended.",
+    "expected_uncertainties": [
+      "weak_evidence"
+    ]
+  },
+  {
+    "name": "conflicting-influenza-covid_8",
+    "case_text": "Patient presents with sudden onset fever (102°F), dry cough, myalgia, and reported loss of taste and smell. No known sick contacts. Symptoms began 2 days ago. Oxygen saturation 97%. Rapid influenza test negative. SARS-CoV-2 PCR pending.",
+    "mock_rag_documents": [
+      {
+        "disease": "Influenza",
+        "retrieval_score": 0.94
+      },
+      {
+        "disease": "COVID-19",
+        "retrieval_score": 0.91
+      }
+    ],
+    "mock_llm_output": "Agent Conflict Detected: Primary Diagnosis Agent suggests Influenza (based on rapid onset, myalgia, fever, negative rapid flu test with 50% sensitivity). Specialist Agent (Infectious Disease) suggests COVID-19 (due to anosmia, high community prevalence, negative flu test). Confidence scores overlap. Resolution requires additional data (PCR result). Final output: differential diagnosis with conflict flag.",
+    "expected_uncertainties": [
+      "agent_conflict"
+    ]
+  },
+  {
+    "name": "test_unsupported_candidate_9",
+    "case_text": "A 45-year-old male presents with a 6-week history of productive cough, occasional hemoptysis, unintentional weight loss of 8 kg, night sweats, and low-grade fever. Chest X-ray reveals upper lobe infiltrates. IGRA test is negative. Sputum cultures are pending.",
+    "mock_rag_documents": [
+      {
+        "disease": "Sarcoidosis",
+        "retrieval_score": 0.91
+      },
+      {
+        "disease": "Lymphoma",
+        "retrieval_score": 0.88
+      },
+      {
+        "disease": "Fungal pneumonia",
+        "retrieval_score": 0.85
+      },
+      {
+        "disease": "Atypical mycobacterial infection",
+        "retrieval_score": 0.83
+      }
+    ],
+    "mock_llm_output": "The most likely diagnosis is Tuberculosis, given classic symptoms of cough, hemoptysis, weight loss, and night sweats. Chest X-ray findings are consistent with reactivation TB. IGRA may be false negative in immunocompromise, but sputum culture will confirm.",
+    "expected_uncertainties": [
+      "unsupported_candidate"
+    ]
+  },
+  {
+    "name": "Acute Chest Pain Urgent Risk_10",
+    "case_text": "A 58-year-old male presents with sudden onset severe substernal chest pain radiating to the left arm, accompanied by shortness of breath and profuse sweating. Vital signs: BP 90/60, HR 110, RR 24, O2 sat 92% on room air. ECG shows ST-segment elevation in leads II, III, aVF.",
+    "mock_rag_documents": [
+      {
+        "disease": "Acute Myocardial Infarction",
+        "retrieval_score": 0.95
+      },
+      {
+        "disease": "Aortic Dissection",
+        "retrieval_score": 0.75
+      },
+      {
+        "disease": "Pulmonary Embolism",
+        "retrieval_score": 0.6
+      }
+    ],
+    "mock_llm_output": "Based on the clinical presentation and ECG findings, there is a high probability of acute inferior ST-elevation myocardial infarction. Immediate transfer to the emergency department for primary percutaneous coronary intervention is strongly recommended. Delay in treatment poses a significant risk of mortality.",
+    "expected_uncertainties": [
+      "urgent_risk"
+    ]
+  },
+  {
+    "name": "Missing evidence for rare tropical disease_11",
+    "case_text": "A 45-year-old male presents with fever, joint pain, and a distinctive rash after returning from a trip to West Africa. Lab results show thrombocytopenia and elevated liver enzymes. What is the likely diagnosis?",
+    "mock_rag_documents": [
+      {
+        "disease": "Malaria",
+        "retrieval_score": 0.45
+      },
+      {
+        "disease": "Typhoid fever",
+        "retrieval_score": 0.32
+      },
+      {
+        "disease": "Dengue fever",
+        "retrieval_score": 0.28
+      }
+    ],
+    "mock_llm_output": "Based on the provided information, the symptoms and travel history suggest a possible viral hemorrhagic fever such as Lassa fever or Ebola, but there is insufficient evidence in the retrieved documents to confirm. Further tests are needed.",
+    "expected_uncertainties": [
+      "missing_evidence"
+    ]
+  },
+  {
+    "name": "Weak Evidence in Rare Disease Diagnosis_12",
+    "case_text": "A 45-year-old female presents with intermittent abdominal pain, rash on extremities, and joint stiffness. Lab tests show elevated ESR and CRP, but negative ANA and RF. What is the most likely diagnosis?",
+    "mock_rag_documents": [
+      {
+        "disease": "Systemic lupus erythematosus",
+        "retrieval_score": 0.2
+      },
+      {
+        "disease": "Rheumatoid arthritis",
+        "retrieval_score": 0.15
+      },
+      {
+        "disease": "Still's disease",
+        "retrieval_score": 0.25
+      },
+      {
+        "disease": "Vasculitis",
+        "retrieval_score": 0.18
+      }
+    ],
+    "mock_llm_output": "Based on the available evidence, the patient's symptoms could be consistent with several autoimmune conditions. However, the retrieved literature lacks strong support for any specific diagnosis. The most relevant document (Adult-onset Still's disease) has a retrieval score of 0.25, indicating weak evidence. Further specialist evaluation and targeted testing are recommended.",
+    "expected_uncertainties": [
+      "weak_evidence"
+    ]
+  },
+  {
+    "name": "Conflicting Diagnosis Agents Scenario_13",
+    "case_text": "Patient is a 45-year-old male presenting with acute chest pain, shortness of breath, and dizziness. EKG shows ST-segment elevation. Troponin levels elevated. However, the patient also has a recent history of bronchitis and a new cough with blood-tinged sputum, and a D-dimer test is elevated. CT scan shows a filling defect in the pulmonary artery. The patient has risk factors for both myocardial infarction and pulmonary embolism.",
+    "mock_rag_documents": [
+      {
+        "disease": "Myocardial Infarction",
+        "retrieval_score": 0.95
+      },
+      {
+        "disease": "Pulmonary Embolism",
+        "retrieval_score": 0.92
+      },
+      {
+        "disease": "Pericarditis",
+        "retrieval_score": 0.3
+      }
+    ],
+    "mock_llm_output": "Based on the findings, the most likely diagnosis is Myocardial Infarction. The elevated troponin and ST elevation strongly support this. The D-dimer elevation and CT findings could be incidental; pulmonary embolism is not ruled out but requires further investigation.",
+    "expected_uncertainties": [
+      "agent_conflict"
+    ]
+  },
+  {
+    "name": "Trigger unsupported_candidate uncertainty_14",
+    "case_text": "A 35-year-old patient presents with fever, cough, and shortness of breath for three days. No history of chronic lung disease. Suspected acute respiratory infection.",
+    "mock_rag_documents": [
+      {
+        "disease": "Influenza",
+        "retrieval_score": 0.95
+      },
+      {
+        "disease": "COVID-19",
+        "retrieval_score": 0.92
+      },
+      {
+        "disease": "Pneumonia",
+        "retrieval_score": 0.88
+      }
+    ],
+    "mock_llm_output": "Candidate diagnoses: Influenza, Bronchitis, COVID-19, Pneumonia",
+    "expected_uncertainties": [
+      "unsupported_candidate"
+    ]
+  },
+  {
+    "name": "Urgent Risk Chest Pain_15",
+    "case_text": "55-year-old male presents with sudden onset chest pain radiating to left arm, dyspnea, diaphoresis. History of hypertension, smoker. Vitals: BP 150/90, HR 110, O2 sat 94% on room air. ECG shows ST-segment depression in lateral leads. Troponin pending.",
+    "mock_rag_documents": [
+      {
+        "disease": "Acute Coronary Syndrome",
+        "retrieval_score": 0.95
+      },
+      {
+        "disease": "Pulmonary Embolism",
+        "retrieval_score": 0.75
+      },
+      {
+        "disease": "Aortic Dissection",
+        "retrieval_score": 0.6
+      }
+    ],
+    "mock_llm_output": "Possible acute coronary syndrome (high risk given ECG changes and risk factors). Cannot rule out pulmonary embolism or aortic dissection. Troponin result needed. Urgent risk: patient may deteriorate quickly; immediate transfer to emergency department required.",
+    "expected_uncertainties": [
+      "urgent_risk"
+    ]
+  },
+  {
+    "name": "Missing Biopsy for Lymphoma Diagnosis_16",
+    "case_text": "A 55-year-old male presents with fatigue, unexplained weight loss of 10 kg in 2 months, and night sweats. Physical exam reveals bilateral cervical lymphadenopathy. CBC shows mild anemia. No biopsy performed yet.",
+    "mock_rag_documents": [
+      {
+        "disease": "Lymphoma",
+        "retrieval_score": 0.7
+      },
+      {
+        "disease": "Tuberculosis",
+        "retrieval_score": 0.5
+      }
+    ],
+    "mock_llm_output": "Based on symptoms and lymphadenopathy, possible diagnoses include lymphoma or tuberculosis. However, definitive diagnosis requires biopsy of lymph node. Without biopsy results, diagnosis remains uncertain.",
+    "expected_uncertainties": [
+      {
+        "type": "missing_evidence",
+        "detail": "Lymph node biopsy not performed."
+      }
+    ]
+  },
+  {
+    "name": "Weak Evidence in Differential Diagnosis_17",
+    "case_text": "A 45-year-old female presents with fatigue, mild joint pain, and occasional low-grade fever for 3 months. Physical exam unremarkable. Lab tests: normal CBC, ESR slightly elevated (30 mm/hr), ANA borderline positive (1:80).",
+    "mock_rag_documents": [
+      {
+        "disease": "Systemic Lupus Erythematosus",
+        "retrieval_score": 0.35
+      },
+      {
+        "disease": "Fibromyalgia",
+        "retrieval_score": 0.42
+      },
+      {
+        "disease": "Chronic Fatigue Syndrome",
+        "retrieval_score": 0.38
+      }
+    ],
+    "mock_llm_output": "Based on the retrieved literature, the evidence for a specific diagnosis is weak. The top matches (SLE, Fibromyalgia, CFS) have low confidence scores (<0.5). I would recommend further testing and monitoring before making a definitive diagnosis.",
+    "expected_uncertainties": [
+      "weak_evidence"
+    ]
+  },
+  {
+    "name": "Agent Conflict: MI vs PE Diagnosis_18",
+    "case_text": "A 55-year-old male with hypertension and diabetes presents with acute onset chest pain, shortness of breath, and diaphoresis. ECG shows ST elevation in leads II, III, aVF. D-dimer is elevated. Vital signs: BP 140/90, HR 110, RR 24, SpO2 92% on room air.",
+    "mock_rag_documents": [
+      {
+        "disease": "Myocardial Infarction",
+        "retrieval_score": 0.95
+      },
+      {
+        "disease": "Pulmonary Embolism",
+        "retrieval_score": 0.92
+      }
+    ],
+    "mock_llm_output": "Based on ECG findings, the patient is most likely experiencing an inferior ST-elevation myocardial infarction. Immediate reperfusion therapy is indicated.",
+    "expected_uncertainties": [
+      "agent_conflict"
+    ]
+  },
+  {
+    "name": "Unsupported Diagnosis Candidate_19",
+    "case_text": "A 55-year-old patient presents with high fever, cough, chest pain, and confusion. Recent travel to a convention hotel. X-ray shows patchy infiltrates.",
+    "mock_rag_documents": [
+      {
+        "disease": "Influenza",
+        "retrieval_score": 0.9
+      },
+      {
+        "disease": "Pneumococcal pneumonia",
+        "retrieval_score": 0.85
+      },
+      {
+        "disease": "COVID-19",
+        "retrieval_score": 0.8
+      }
+    ],
+    "mock_llm_output": "Given the symptoms and travel history, the most likely diagnosis is Legionnaires' disease.",
+    "expected_uncertainties": [
+      "unsupported_candidate"
+    ]
+  },
+  {
+    "name": "Aortic Dissection Urgent Risk Scenario_20",
+    "case_text": "A 65-year-old male presents with sudden onset severe 'tearing' chest pain radiating to his back. He has a history of hypertension and is currently experiencing a blood pressure of 210/110 mmHg. An ECG shows non-specific ST changes. The patient is diaphoretic and appears acutely distressed.",
+    "mock_rag_documents": [
+      {
+        "disease": "Aortic Dissection",
+        "retrieval_score": 0.95
+      },
+      {
+        "disease": "Myocardial Infarction",
+        "retrieval_score": 0.87
+      },
+      {
+        "disease": "Pulmonary Embolism",
+        "retrieval_score": 0.82
+      }
+    ],
+    "mock_llm_output": "The patient's presentation of acute tearing chest pain with radiation to the back, severe hypertension, and ECG without clear STEMI raises high suspicion for acute aortic dissection. Immediate emergent evaluation with CT angiography is warranted. Consider blood pressure control with beta blockers. Differential diagnoses include myocardial infarction and pulmonary embolism, but aortic dissection must be ruled out first due to the risk of sudden death.",
+    "expected_uncertainties": [
+      "urgent_risk"
+    ]
+  }
+]

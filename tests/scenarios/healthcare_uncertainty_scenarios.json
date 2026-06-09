@@ -1,0 +1,39 @@
+[
+  {
+    "name": "missing_evidence_skips_candidate_reasoning",
+    "case_text": "zzzzunknownsymptom",
+    "mock_rag_documents": [],
+    "mock_llm_output": null,
+    "expected_uncertainties": ["missing_evidence", "branch_skipped"]
+  },
+  {
+    "name": "rag_llm_conflict",
+    "case_text": "fever and cough",
+    "mock_rag_documents": [
+      {
+        "disease": "pneumonia",
+        "retrieval_score": 2.0,
+        "matched_query_terms": ["fever", "cough"]
+      }
+    ],
+    "mock_llm_output": "heart failure should be considered",
+    "expected_uncertainties": ["agent_conflict", "unsupported_candidate"]
+  },
+  {
+    "name": "weak_evidence_unsupported_candidate_demo",
+    "case_text": "patient has fever, cough, and mild shortness of breath for two days",
+    "mock_rag_documents": [
+      {
+        "disease": "pneumonia",
+        "retrieval_score": 0.4,
+        "matched_query_terms": ["fever"]
+      }
+    ],
+    "mock_llm_output": "migraine should be considered because headache can present with nonspecific symptoms",
+    "expected_uncertainties": [
+      "weak_evidence",
+      "agent_conflict",
+      "unsupported_candidate"
+    ]
+  }
+]

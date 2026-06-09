@@ -21,6 +21,12 @@ class DifferentialDiagnosisAgent(Agent):
             return self.needs_data("Differential diagnosis requires SymptomExtractionAgent output.")
 
         knowledge_result = self.previous_result(previous, "medical_knowledge_agent")
+        retrieval_quality_result = self.previous_result(previous, "retrieval_quality_agent")
+        evidence_state = (
+            retrieval_quality_result.data.get("evidence_state")
+            if retrieval_quality_result and retrieval_quality_result.status == "ready"
+            else "not_assessed"
+        )
         symptom_candidates = symptom_result.data.get("symptom_candidates", [])
         retrieved_documents = (
             knowledge_result.data.get("documents", [])
@@ -62,6 +68,7 @@ class DifferentialDiagnosisAgent(Agent):
                     ],
                     "symptom_candidates": symptom_candidates,
                     "retrieved_document_count": len(retrieved_documents),
+                    "evidence_state": evidence_state,
                 }
             )
             return missing
@@ -77,8 +84,9 @@ class DifferentialDiagnosisAgent(Agent):
                 ],
                 "symptom_candidates": symptom_candidates,
                 "retrieved_document_count": len(retrieved_documents),
+                "evidence_state": evidence_state,
                 "api_call_role": "differential_diagnosis",
                 "handoff_to": ["evidence_review_agent", "safety_check_agent", "report_agent"],
             },
-            confidence=0.7,
+            confidence=0.5 if evidence_state == "evidence_weak" else 0.7,
         )

@@ -14,6 +14,12 @@ class ReportAgent(Agent):
 
     def run(self, context: AgentContext, previous: list[AgentResult]) -> AgentResult:
         blocking = [result for result in previous if result.status not in {"ready", "skipped"}]
+        uncertainty_result = self.previous_result(previous, "uncertainty_assessment_agent")
+        uncertainties = (
+            uncertainty_result.data.get("uncertainties", [])
+            if uncertainty_result and uncertainty_result.status == "ready"
+            else []
+        )
         agent_handoffs = [
             {
                 "agent": result.agent,
@@ -36,6 +42,7 @@ class ReportAgent(Agent):
                     "completed_agents": [
                         result.agent for result in previous if result.status == "ready"
                     ],
+                    "uncertainties": uncertainties,
                     "agent_handoffs": agent_handoffs,
                     "blocked_agents": [
                         {
@@ -83,7 +90,8 @@ class ReportAgent(Agent):
                     f"DifferentialDiagnosisAgent output: {differential_output}\n"
                     f"EvidenceReviewAgent output: {evidence_output}\n"
                     f"Safety red flags: {red_flags}\n"
-                    f"Safety recommendations: {safety_recommendations}"
+                    f"Safety recommendations: {safety_recommendations}\n"
+                    f"Workflow uncertainties: {uncertainties}"
                 ),
             },
         ]
@@ -97,6 +105,7 @@ class ReportAgent(Agent):
                 {
                     "used_previous_agents": [item.agent for item in previous],
                     "agent_handoffs": agent_handoffs,
+                    "uncertainties": uncertainties,
                     "red_flags": red_flags,
                     "retrieved_document_count": len(retrieved_documents),
                 }
@@ -111,6 +120,7 @@ class ReportAgent(Agent):
                 "model_output": result.content,
                 "used_previous_agents": [item.agent for item in previous],
                 "agent_handoffs": agent_handoffs,
+                "uncertainties": uncertainties,
                 "red_flags": red_flags,
                 "retrieved_document_count": len(retrieved_documents),
                 "api_call_role": "final_report_synthesis",

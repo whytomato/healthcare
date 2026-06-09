@@ -1,0 +1,13 @@
+{
+  "name": "cli_generated_rag_llm_conflict",
+  "case_text": "fever and cough",
+  "mock_rag_documents": [
+    {
+      "disease": "pneumonia",
+      "retrieval_score": 2.0,
+      "matched_query_terms": ["fever", "cough"]
+    }
+  ],
+  "mock_llm_output": "heart failure should be considered",
+  "expected_uncertainties": ["agent_conflict", "unsupported_candidate"]
+}

@@ -11,4 +11,8 @@ build/
 .env.*
 !.env.example
 outputs/
+tests/scenarios/*.test.json
+tests/scenarios/generated*.json
+tests/scenarios/llm_generated*.json
+!tests/scenarios/llm_generated_cases.json
 backend/target/
