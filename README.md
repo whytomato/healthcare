@@ -7,7 +7,27 @@
 - **真实流程 demo**：使用本地 RAG 数据和真实 LLM API，运行完整多智能体分析流程。
 - **Mock scenario 测试**：使用固定 JSON 控制 RAG 和 LLM agent 输出，不调用真实 LLM，用于稳定触发不确定性。
 
-## 当前 Workflow
+## 完整 Demo 链路
+
+真实 demo 可以从 Python 本地 CLI 直接进入 workflow，也可以走 Spring Boot + Kafka + Python Worker 的完整链路。
+
+```mermaid
+flowchart LR
+    User[医生 / Apifox / curl] --> Backend[Spring Boot Backend<br/>创建 AI task]
+    Backend --> Query[Kafka ai.symptom.query]
+    Query --> Worker[Python AI Worker]
+    Worker --> Orch[Orchestrator]
+    Orch --> Agents[Agent Workflow]
+    Agents --> Result[Workflow Result JSON]
+    Result --> ResultTopic[Kafka ai.symptom.result]
+    ResultTopic --> Backend
+    Backend --> TaskAPI[GET /api/ai/tasks/{taskId}]
+
+    LocalCLI[Python 本地 CLI<br/>python -B -m app.main] --> Orch
+    OnceFile[Worker once-file demo<br/>examples/symptom_task.json] --> Worker
+```
+
+## Agent Workflow
 
 ```mermaid
 flowchart TD
@@ -48,13 +68,34 @@ flowchart TD
 
     U --> RP
     RP --> OUT[完整 workflow JSON]
+```
 
-    subgraph MockReplay[Scenario replay 中的替换]
-      SMK[ScenarioMedicalKnowledgeAgent<br/>固定 mock_rag_documents]
-      SDD[ScenarioDifferentialDiagnosisAgent<br/>固定 mock_llm_output]
-      SER[ScenarioEvidenceReviewAgent<br/>不调用真实 LLM]
-      SRP[ScenarioReportAgent<br/>不调用真实 LLM]
-    end
+## Scenario Replay
+
+Scenario replay 是 mock-only 测试路径。它仍然跑同一套 workflow 结构，但把会访问外部数据或 LLM 的 agent 换成固定 JSON 驱动的 scenario agent。
+
+```mermaid
+flowchart TD
+    Scenario[Scenario JSON<br/>case_text + mock outputs] --> Runner[run_uncertainty_scenario.py]
+    Runner --> SX[SymptomExtractionAgent]
+    SX --> BP[BranchPlannerAgent]
+
+    Runner --> SMK[ScenarioMedicalKnowledgeAgent<br/>读取 mock_rag_documents]
+    Runner --> SDD[ScenarioDifferentialDiagnosisAgent<br/>读取 mock_llm_output]
+    Runner --> SER[ScenarioEvidenceReviewAgent<br/>不调用真实 LLM]
+    Runner --> SRP[ScenarioReportAgent<br/>不调用真实 LLM]
+
+    SMK --> RQ[RetrievalQualityAgent]
+    RQ --> CS[CandidateSupportAgent]
+    SDD --> CS
+    SMK --> RC[RagLlmConsistencyAgent]
+    SDD --> RC
+    BP --> UA[UncertaintyAssessmentAgent]
+    RQ --> UA
+    CS --> UA
+    RC --> UA
+    UA --> SRP
+    SRP --> Output[Scenario result / summary JSON]
 ```
 
 当前显式建模的不确定性类型：
