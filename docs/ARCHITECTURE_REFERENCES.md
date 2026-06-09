@@ -105,6 +105,8 @@ Report synthesis
   -> ReportAgent
 
 Controlled model-based test execution
-  -> app/uncertainty_scenario_runner.py
+  -> app/scenario/runner.py
+  -> app/scenario/agents.py
+  -> app/scenario/generator.py
   -> tests/scenarios/*.json
 ```

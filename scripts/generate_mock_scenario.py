@@ -10,7 +10,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.llm_client import LlmResult
-from app.mock_scenario_generator import generate_mock_scenario
+from app.scenario import generate_mock_scenario
 
 
 class FileBackedScenarioLlmClient:

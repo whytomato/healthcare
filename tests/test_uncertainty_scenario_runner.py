@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 
-from app.uncertainty_scenario_runner import run_uncertainty_scenario
+from app.scenario import run_uncertainty_scenario
 
 
 SCENARIO_PATH = Path("tests/scenarios/healthcare_uncertainty_scenarios.json")

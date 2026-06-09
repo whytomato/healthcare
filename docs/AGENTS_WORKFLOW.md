@@ -4,6 +4,8 @@
 
 ## Agent 列表
 
+`app/agents/` 只放真实 workflow agent。Scenario replay 使用的替身 agent 放在 `app/scenario/agents.py`，因为它们不是正式业务 agent，而是 controlled scenario replay 的测试回放 adapter。
+
 | Agent | 作用 | 可能引出的不确定性 |
 |---|---|---|
 | `SymptomExtractionAgent` | 从病例文本中提取和规范化症状候选词。 | `incomplete_input`：输入为空或信息不足。 |

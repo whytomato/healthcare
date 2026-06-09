@@ -21,7 +21,7 @@ flowchart LR
     Agents --> Result[Workflow Result JSON]
     Result --> ResultTopic[Kafka ai.symptom.result]
     ResultTopic --> Backend
-    Backend --> TaskAPI[GET /api/ai/tasks/{taskId}]
+    Backend --> TaskAPI["GET /api/ai/tasks/{taskId}"]
 
     LocalCLI[Python 本地 CLI<br/>python -B -m app.main] --> Orch
     OnceFile[Worker once-file demo<br/>examples/symptom_task.json] --> Worker
@@ -90,10 +90,15 @@ flowchart TD
     SDD --> CS
     SMK --> RC[RagLlmConsistencyAgent]
     SDD --> RC
+    SMK --> SER
+    SDD --> SER
+    SER --> SCS[SafetyCheckAgent]
     BP --> UA[UncertaintyAssessmentAgent]
     RQ --> UA
     CS --> UA
     RC --> UA
+    SCS --> UA
+    SER --> SRP
     UA --> SRP
     SRP --> Output[Scenario result / summary JSON]
 ```
@@ -112,7 +117,8 @@ flowchart TD
 
 ```text
 app/                    Python 多智能体流程
-app/agents/             各个 agent 的实现
+app/agents/             真实 workflow agent
+app/scenario/           controlled scenario replay 的 runner、scenario agents 和 generator
 backend/                Kotlin Spring Boot 后端
 data/                   本地疾病-症状小知识库
 docs/                   架构、业务流程和 agent 说明
@@ -129,6 +135,11 @@ outputs/                本地运行结果，默认不提交
 - `docs/AGENTS_WORKFLOW.md`：当前所有 agent 的职责和不确定性映射。
 - `docs/BUSINESS_FLOW.md`：后端、Kafka、Python worker 的业务链路。
 - `docs/ARCHITECTURE_REFERENCES.md`：当前架构定位和相关研究方向。
+- `docs/README.md`：文档入口，适合从 GitHub 页面开始阅读。
+
+GitHub 仓库：
+
+- <https://github.com/whytomato/healthcare>
 
 ## 环境准备
 

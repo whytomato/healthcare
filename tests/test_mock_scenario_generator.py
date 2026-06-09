@@ -1,8 +1,7 @@
 from pathlib import Path
 
 from app.llm_client import LlmResult
-from app.mock_scenario_generator import generate_mock_scenario
-from app.uncertainty_scenario_runner import run_uncertainty_scenario
+from app.scenario import generate_mock_scenario, run_uncertainty_scenario
 
 
 class FakeScenarioLlmClient:

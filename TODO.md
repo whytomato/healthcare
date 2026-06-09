@@ -10,6 +10,9 @@
 - [ ] 重新评估 `EvidenceReviewAgent` 的定位：它现在主要服务于最终报告，不是核心不确定性判定 agent。
 - [ ] 确认 workflow 图中每个 agent 是否都有清晰的下游消费者，避免出现“断头节点”。
 - [ ] 讨论是否让 `EvidenceReviewAgent` 输出结构化字段，例如 `supported_claims`、`unsupported_claims`、`missing_evidence`、`follow_up_questions`，使其更直接参与不确定性建模。
+- [ ] 决定是否继续保留 `docs/中文架构参考报告.md`。它是早期参考报告，部分 agent 列表已经和当前 workflow 不完全一致。
+- [ ] 决定 `ScenarioReportAgent` 是否需要进一步模拟真实 `ReportAgent` 的报告结构。目前它会收集上游结果，但仍然不会调用真实 LLM 生成自然语言报告。
+- [ ] 决定动态分支触发逻辑是否要更多回收到 `BranchPlannerAgent`。当前 `evidence_missing` 导致跳过下游分支的逻辑主要在 `AgentCoordinator` 中。
 
 ## 可能的下一步
 
