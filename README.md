@@ -34,6 +34,8 @@ flowchart TD
     CS --> U
 
     CO --> ER[EvidenceReviewAgent<br/>证据审查]
+    ER --> SC
+    ER --> RP
     MK --> RC[RagLlmConsistencyAgent<br/>RAG 与 LLM 一致性]
     DD --> RC
     RC --> U
@@ -70,6 +72,12 @@ tests/                  自动化测试
 tests/scenarios/        可执行 mock scenario 数据
 outputs/                本地运行结果，默认不提交
 ```
+
+重要文档：
+
+- `docs/AGENTS_WORKFLOW.md`：当前所有 agent 的职责和不确定性映射。
+- `docs/BUSINESS_FLOW.md`：后端、Kafka、Python worker 的业务链路。
+- `docs/ARCHITECTURE_REFERENCES.md`：当前架构定位和相关研究方向。
 
 ## 环境准备
 
