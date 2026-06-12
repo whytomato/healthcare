@@ -1,71 +1,89 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from typing import Any
 
-from app.schemas.message import AgentContext, AgentResult
-
-
-STATUS_READY = "ready"
-STATUS_NEEDS_DATA = "needs_data"
-STATUS_SKIPPED = "skipped"
+from app.agents.context import HospitalAgentResult, HospitalContext
+from app.agents.llm import HospitalLlmClient, hospital_messages
 
 
-class Agent(ABC):
+class HospitalAgent:
     name: str
-    required_inputs: tuple[str, ...] = ()
+    role: str
 
-    @abstractmethod
-    def run(self, context: AgentContext, previous: list[AgentResult]) -> AgentResult:
-        """Run one agent against the case context and prior agent outputs."""
+    def run(
+        self,
+        context: HospitalContext,
+        previous: list[HospitalAgentResult],
+    ) -> HospitalAgentResult:
+        raise NotImplementedError
 
     def previous_result(
         self,
-        previous: list[AgentResult],
+        previous: list[HospitalAgentResult],
         agent_name: str,
-    ) -> AgentResult | None:
+    ) -> HospitalAgentResult | None:
         return next((result for result in previous if result.agent == agent_name), None)
-
-    def needs_data(self, summary: str) -> AgentResult:
-        return AgentResult(
-            agent=self.name,
-            status=STATUS_NEEDS_DATA,
-            summary=summary,
-            required_inputs=list(self.required_inputs),
-            confidence=0.0,
-        )
-
-    def missing_tool(self, summary: str, required_inputs: list[str]) -> AgentResult:
-        return AgentResult(
-            agent=self.name,
-            status=STATUS_NEEDS_DATA,
-            summary=summary,
-            required_inputs=required_inputs,
-            confidence=0.0,
-        )
-
-    def skipped(self, summary: str, data: dict | None = None) -> AgentResult:
-        return AgentResult(
-            agent=self.name,
-            status=STATUS_SKIPPED,
-            summary=summary,
-            data=data or {},
-            confidence=0.0,
-        )
 
     def ready(
         self,
         summary: str,
         findings: list[str] | None = None,
         recommendations: list[str] | None = None,
-        data: dict | None = None,
-        confidence: float = 1.0,
-    ) -> AgentResult:
-        return AgentResult(
+        decisions: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        handoff_to: list[str] | None = None,
+        confidence: float = 0.7,
+    ) -> HospitalAgentResult:
+        return HospitalAgentResult(
             agent=self.name,
-            status=STATUS_READY,
+            status="ready",
             summary=summary,
+            role=self.role,
             findings=findings or [],
             recommendations=recommendations or [],
+            decisions=decisions or {},
             data=data or {},
+            handoff_to=handoff_to or [],
             confidence=confidence,
         )
+
+
+class LlmBackedHospitalAgent(HospitalAgent):
+    llm_task: str
+
+    def __init__(self, llm_client: HospitalLlmClient | None = None) -> None:
+        self.llm_client = llm_client
+
+    def llm_finding(
+        self,
+        context: HospitalContext,
+        previous: list[HospitalAgentResult],
+    ) -> tuple[str | None, dict[str, Any]]:
+        if self.llm_client is None:
+            return None, {"llm_driven": False, "llm_status": "not_configured"}
+
+        result = self.llm_client.chat(
+            hospital_messages(
+                role=self.role,
+                task=self.llm_task,
+                case_text=context.case_text,
+                context_summary=_context_summary(previous),
+                language=context.language,
+            )
+        )
+        if result.status != "ready":
+            return None, {
+                "llm_driven": False,
+                "llm_status": result.status,
+                "llm_message": result.message,
+            }
+        return result.content, {"llm_driven": True, "llm_status": "ready"}
+
+
+def _context_summary(previous: list[HospitalAgentResult]) -> str:
+    if not previous:
+        return "No prior role outputs."
+    return "\n".join(
+        f"{result.agent}: {result.summary}; decisions={result.decisions}"
+        for result in previous
+    )

@@ -5,11 +5,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from app.orchestrator import Orchestrator
-from app.schemas.message import AgentResult
-
-
-orchestrator = Orchestrator()
+from app.llm_client import LlmResult
+from app.workflows.hospital import HospitalOrchestrator
 
 
 try:
@@ -18,8 +15,53 @@ except ImportError:  # pragma: no cover
     FastAPI = None
 
 
+class MockHospitalLlmClient:
+    def chat(self, messages: list[dict[str, str]]) -> LlmResult:
+        role = messages[0]["content"].split("ROLE:", 1)[1].split("\n", 1)[0].strip()
+        return LlmResult(
+            status="ready",
+            content=f"Mock LLM output for {role}.",
+        )
+
+
+class MockAIConsultationTool:
+    def run(
+        self,
+        case_text: str,
+        patient_id: str | None = None,
+        doctor_id: str | None = None,
+        language: str = "zh-CN",
+    ) -> dict:
+        symptoms = [
+            symptom
+            for symptom in ["fever", "cough", "chest discomfort", "confusion"]
+            if symptom in case_text.lower()
+        ]
+        return {
+            "workflow": "ai_consultation_tool",
+            "status": "ready",
+            "patient_id": patient_id,
+            "doctor_id": doctor_id,
+            "language": language,
+            "symptoms": symptoms or ["case_text"],
+            "llm_status": "ready",
+            "llm_output": "Mock AI consultation tool output.",
+            "retrieved_documents": [],
+            "required_config": [],
+        }
+
+
+def build_orchestrator(mock_llm: bool = False) -> HospitalOrchestrator:
+    if not mock_llm:
+        return HospitalOrchestrator()
+    return HospitalOrchestrator(
+        llm_client=MockHospitalLlmClient(),
+        consultation_tool=MockAIConsultationTool(),
+    )
+
+
 if FastAPI is not None:
-    api = FastAPI(title="Healthcare Multi-Agent API")
+    api = FastAPI(title="Healthcare Agent Hospital API")
 
     @api.get("/health")
     def health() -> dict[str, str]:
@@ -27,46 +69,24 @@ if FastAPI is not None:
 
     @api.post("/analyze")
     def analyze(payload: dict[str, str]) -> dict:
-        case_text = payload.get("case_text", "")
-        patient_id = payload.get("patient_id")
-        doctor_id = payload.get("doctor_id")
-        question = payload.get(
-            "question",
-            "What diseases or conditions should be considered for these symptoms?",
-        )
-        language = payload.get("language", "zh-CN")
-        return orchestrator.run(
-            case_text=case_text,
-            patient_id=patient_id,
-            doctor_id=doctor_id,
-            question=question,
-            language=language,
+        return build_orchestrator().run(
+            case_text=payload.get("case_text", ""),
+            patient_id=payload.get("patient_id"),
+            doctor_id=payload.get("doctor_id"),
+            language=payload.get("language", "zh-CN"),
         )
 else:
     api = None
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the healthcare multi-agent flow.")
-    parser.add_argument("--case-text", required=True, help="Real symptom or case text to pass through agents.")
-    parser.add_argument(
-        "--question",
-        default="What diseases or conditions should be considered for these symptoms?",
-        help="Doctor's question for the AI workflow.",
-    )
-    parser.add_argument("--patient-id", default=None, help="Optional real patient identifier.")
-    parser.add_argument("--doctor-id", default=None, help="Optional real doctor identifier.")
+    parser = argparse.ArgumentParser(description="Run the Agent Hospital-lite workflow.")
+    parser.add_argument("--case-text", required=True, help="Patient case text.")
+    parser.add_argument("--patient-id", default=None, help="Optional patient identifier.")
+    parser.add_argument("--doctor-id", default=None, help="Optional doctor identifier.")
     parser.add_argument("--language", default="zh-CN", help="Preferred response language.")
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Hide per-agent progress logs.",
-    )
-    parser.add_argument(
-        "--print-json",
-        action="store_true",
-        help="Print the full JSON result to the console.",
-    )
+    parser.add_argument("--mock-llm", action="store_true", help="Use deterministic mock outputs.")
+    parser.add_argument("--print-json", action="store_true", help="Print the full JSON result.")
     parser.add_argument(
         "--output",
         default=None,
@@ -74,13 +94,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    result = orchestrator.run(
+    result = build_orchestrator(mock_llm=args.mock_llm).run(
         case_text=args.case_text,
         patient_id=args.patient_id,
         doctor_id=args.doctor_id,
-        question=args.question,
         language=args.language,
-        progress_callback=None if args.quiet else print_agent_progress,
     )
     output_path = write_result_json(result, args.output)
     print_summary(result, output_path)
@@ -100,22 +118,10 @@ def write_result_json(result: dict, output: str | None) -> Path:
 
 
 def print_summary(result: dict, output_path: Path) -> None:
-    print("")
-    print("[summary]")
-    for item in result.get("results", []):
-        print(f"- {item.get('agent')}: {item.get('status')}")
+    print(f"[workflow] {result.get('workflow')}")
+    print(f"[agents] {len(result.get('agent_results', []))}")
+    print(f"[specialties] {', '.join(result.get('selected_specialties', []))}")
     print(f"[output] full JSON written to {output_path}")
-
-
-def print_agent_progress(agent_name: str, result: AgentResult | None) -> None:
-    if result is None:
-        print(f"[agent:start] {agent_name}")
-        return
-
-    print(f"[agent:done]  {agent_name} -> {result.status}")
-    print(f"              {result.summary}")
-    if result.required_inputs:
-        print(f"              required_inputs: {', '.join(result.required_inputs)}")
 
 
 if __name__ == "__main__":

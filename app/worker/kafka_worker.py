@@ -8,7 +8,7 @@ from typing import Any
 
 from app.config import load_env_file
 from app.contracts import SymptomQueryResult, SymptomQueryTask
-from app.orchestrator import Orchestrator
+from app.workflows.hospital import HospitalOrchestrator
 
 
 DEFAULT_QUERY_TOPIC = "ai.symptom.query"
@@ -53,14 +53,15 @@ def run_once_file(path: Path) -> SymptomQueryResult:
 
 def process_task(task: SymptomQueryTask) -> SymptomQueryResult:
     try:
-        result = Orchestrator().run(
+        result = HospitalOrchestrator().run(
             case_text=task.case_text,
             patient_id=task.patient_id,
             doctor_id=task.doctor_id,
-            question=task.question,
             language=task.language,
         )
-        final_status = result["results"][-1]["status"] if result.get("results") else "failed"
+        final_status = (
+            result["agent_results"][-1]["status"] if result.get("agent_results") else "failed"
+        )
         return SymptomQueryResult(
             task_id=task.task_id,
             status=final_status,
