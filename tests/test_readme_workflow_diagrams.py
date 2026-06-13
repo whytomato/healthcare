@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-def test_readme_documents_demo_chain_and_agent_workflow_diagrams() -> None:
+def test_readme_documents_demo_chain_and_branched_agent_workflow_diagrams() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert "完整 Demo 链路" in readme
@@ -10,9 +10,11 @@ def test_readme_documents_demo_chain_and_agent_workflow_diagrams() -> None:
     assert "Python AI Worker" in readme
     assert "ai.symptom.result" in readme
 
-    assert "Agent Hospital-lite Workflow" in readme
+    assert "Branched Agent Hospital-lite Workflow" in readme
     assert "TriageNurseAgent" in readme
+    assert "EmergencyPhysicianAgent" in readme
     assert "GeneralPractitionerAgent" in readme
+    assert "DispositionCoordinatorAgent" in readme
     assert "AIConsultationTool" in readme
     assert "FinalHospitalReportAgent" in readme
 

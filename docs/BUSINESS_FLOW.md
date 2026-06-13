@@ -51,15 +51,23 @@ AppointmentAgent
 TriageNurseAgent
   -> 检查紧急程度和危险信号
 
+  -> high urgency:
+     EmergencyPhysicianAgent
+     -> 识别即时安全行动，进入急诊分支
+
+  -> standard urgency:
+     GeneralPractitionerAgent
+     -> 进入普通门诊分支
+
 GeneralPractitionerAgent
   -> 做全科初评，判断是否需要专科会诊
 
 SpecialistRouterAgent
-  -> 根据病例文本选择需要激活的专科角色
+  -> 根据病例文本选择需要激活的专科角色，不再默认运行所有专科
 
 RespiratorySpecialistAgent / CardiologySpecialistAgent /
 InfectiousDiseaseSpecialistAgent / NeurologySpecialistAgent
-  -> 产生各专科视角的会诊意见
+  -> 只在被 SpecialistRouterAgent 选中时产生对应专科视角的会诊意见
 
 AIConsultationTool
   -> 被 GeneralPractitionerAgent 作为内部工具调用
@@ -75,11 +83,42 @@ CarePlanAgent
   -> 汇总诊疗计划
 
 FollowUpAgent
-  -> 给出随访计划
+  -> 在普通门诊分支给出随访计划
+
+DispositionCoordinatorAgent
+  -> 汇总分诊、检查、药房和随访信息，决定急诊复评或门诊随访等 demo 级去向
 
 FinalHospitalReportAgent
   -> 生成最终 workflow report
 ```
+
+当前 workflow 是有分支的：
+
+```text
+TriageNurseAgent
+  -> emergency_branch
+     -> EmergencyPhysicianAgent
+     -> GeneralPractitionerAgent
+     -> SpecialistRouterAgent
+     -> selected SpecialistAgents
+     -> LabAdvisorAgent
+     -> PharmacySafetyAgent
+     -> DispositionCoordinatorAgent
+     -> FinalHospitalReportAgent
+
+  -> outpatient_branch
+     -> GeneralPractitionerAgent
+     -> SpecialistRouterAgent
+     -> selected SpecialistAgents
+     -> LabAdvisorAgent
+     -> PharmacySafetyAgent
+     -> CarePlanAgent
+     -> FollowUpAgent
+     -> DispositionCoordinatorAgent
+     -> FinalHospitalReportAgent
+```
+
+`HospitalOrchestrator` 会在输出中返回 `executed_path` 和 `workflow_decisions`，用于展示实际执行路径和每个分支选择的原因。
 
 ## LLM 使用位置
 
@@ -87,6 +126,7 @@ FinalHospitalReportAgent
 
 ```text
 GeneralPractitionerAgent
+EmergencyPhysicianAgent
 RespiratorySpecialistAgent
 CardiologySpecialistAgent
 InfectiousDiseaseSpecialistAgent
@@ -105,6 +145,7 @@ SpecialistRouterAgent
 LabAdvisorAgent
 PharmacySafetyAgent
 FollowUpAgent
+DispositionCoordinatorAgent
 ```
 
 内部 tool 中也可以使用 LLM：

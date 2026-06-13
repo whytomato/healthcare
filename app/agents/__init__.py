@@ -1,6 +1,8 @@
 from app.agents.appointment import AppointmentAgent
 from app.agents.base import HospitalAgent, LlmBackedHospitalAgent
 from app.agents.care_plan import CarePlanAgent
+from app.agents.disposition import DispositionCoordinatorAgent
+from app.agents.emergency import EmergencyPhysicianAgent
 from app.agents.final_report import FinalHospitalReportAgent
 from app.agents.follow_up import FollowUpAgent
 from app.agents.gp import GeneralPractitionerAgent
@@ -20,6 +22,8 @@ __all__ = [
     "AppointmentAgent",
     "CardiologySpecialistAgent",
     "CarePlanAgent",
+    "DispositionCoordinatorAgent",
+    "EmergencyPhysicianAgent",
     "FinalHospitalReportAgent",
     "FollowUpAgent",
     "GeneralPractitionerAgent",

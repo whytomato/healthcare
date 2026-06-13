@@ -25,20 +25,22 @@ flowchart LR
     LocalHospitalCLI[Python Hospital CLI<br/>python -B -m app.main] --> Hospital
 ```
 
-## Agent Hospital-lite Workflow
+## Branched Agent Hospital-lite Workflow
 
 ```mermaid
 flowchart TD
     A[Patient Encounter<br/>case_text] --> Intake[IntakeAgent]
     Intake --> Appointment[AppointmentAgent]
     Appointment --> Triage[TriageNurseAgent]
-    Triage --> GP[GeneralPractitionerAgent<br/>LLM-capable]
+    Triage -->|high urgency| Emergency[EmergencyPhysicianAgent<br/>LLM-capable]
+    Triage -->|standard urgency| GP[GeneralPractitionerAgent<br/>LLM-capable]
+    Emergency --> GP
     GP --> Router[SpecialistRouterAgent]
 
-    Router --> Respiratory[RespiratorySpecialistAgent<br/>LLM-capable]
-    Router --> Cardiology[CardiologySpecialistAgent<br/>LLM-capable]
-    Router --> Infection[InfectiousDiseaseSpecialistAgent<br/>LLM-capable]
-    Router --> Neurology[NeurologySpecialistAgent<br/>LLM-capable]
+    Router -->|selected| Respiratory[RespiratorySpecialistAgent<br/>LLM-capable]
+    Router -->|selected| Cardiology[CardiologySpecialistAgent<br/>LLM-capable]
+    Router -->|selected| Infection[InfectiousDiseaseSpecialistAgent<br/>LLM-capable]
+    Router -->|selected| Neurology[NeurologySpecialistAgent<br/>LLM-capable]
 
     GP --> AIConsultTool[AIConsultationTool<br/>internal tool]
     AIConsultTool --> RagTool[RagMcpClient<br/>knowledge retrieval]
@@ -51,11 +53,15 @@ flowchart TD
     GP --> Lab
 
     Lab --> Pharmacy[PharmacySafetyAgent]
-    Pharmacy --> Care[CarePlanAgent<br/>LLM-capable]
+    Pharmacy -->|outpatient branch| Care[CarePlanAgent<br/>LLM-capable]
     Care --> Follow[FollowUpAgent]
-    Follow --> Report[FinalHospitalReportAgent<br/>LLM-capable]
+    Pharmacy -->|emergency branch| Disposition[DispositionCoordinatorAgent]
+    Follow --> Disposition
+    Disposition --> Report[FinalHospitalReportAgent<br/>LLM-capable]
     Report --> Output[Final Hospital Workflow JSON]
 ```
+
+Workflow 输出包含 `executed_path` 和 `workflow_decisions`，用于展示本次 Patient Encounter 实际走过哪些医院角色 agent，以及分诊和专科路由为什么选择这些分支。
 
 ## 目录结构
 

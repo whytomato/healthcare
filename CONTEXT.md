@@ -17,12 +17,24 @@ A single healthcare service episode that starts from a patient request or appoin
 _Avoid_: Raw symptom query, isolated prompt
 
 **Role-Oriented Healthcare Multi-Agent Workflow**:
-A healthcare workflow where agents represent service roles or departments such as triage nurse, general practitioner, specialist, lab, pharmacy safety, care plan, and follow-up coordination.
+A healthcare workflow where agents represent service roles or departments such as triage nurse, emergency physician, general practitioner, specialist, lab, pharmacy safety, care plan, disposition coordination, and follow-up coordination.
 _Avoid_: Pipeline step masquerading as healthcare role, single question-answering agent
+
+**Branched Hospital Workflow**:
+A role-oriented healthcare workflow where triage and routing decisions determine which hospital role agents participate in a patient encounter.
+_Avoid_: Fixed agent chain, always-run specialist pipeline
 
 **Hospital Role Agent**:
 An agent that represents a healthcare service role or department and produces a structured handoff for downstream roles in the patient encounter.
 _Avoid_: Internal pipeline step, hidden helper function
+
+**Emergency Physician Agent**:
+A hospital role agent that participates when triage identifies high urgency and produces immediate safety actions for the patient encounter.
+_Avoid_: General practitioner, specialist consultant, internal safety tool
+
+**Disposition Coordinator Agent**:
+A hospital role agent that decides the demo-level patient encounter disposition such as emergency reassessment or outpatient follow-up.
+_Avoid_: Final report writer, follow-up note, discharge automation
 
 **AI Consultation Tool**:
 The internal tool that lets a hospital role agent perform symptom extraction, knowledge retrieval, and LLM consultation synthesis without treating those steps as top-level hospital agents.
