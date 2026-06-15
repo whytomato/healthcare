@@ -47,5 +47,5 @@ class GeneralPractitionerAgent(LlmBackedHospitalAgent):
                 "ai_consultation_tool_status": consultation_result.get("status", "unknown"),
             },
             data={**llm_data, "ai_consultation_tool": consultation_result},
-            handoff_to=["specialist_router_agent", "lab_advisor_agent", "care_plan_agent"],
+            handoff_to=["specialist_router_agent"],
         )

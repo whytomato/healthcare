@@ -1,0 +1,31 @@
+server:
+  port: 8083
+
+healthcare:
+  kafka:
+    enabled: true
+    symptom-result-topic: ai.symptom.result
+
+spring:
+  application:
+    name: clinical-record-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/healthcare
+    username: user
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+  kafka:
+    bootstrap-servers: 127.0.0.1:9092
+    consumer:
+      group-id: healthcare-clinical-record-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.value.default.type: com.example.healthcare.record.model.AiSymptomResultMessage
+        spring.json.use.type.headers: false
+    listener:
+      missing-topics-fatal: false

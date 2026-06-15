@@ -36,7 +36,7 @@ class SpecialistAgent(LlmBackedHospitalAgent):
             ],
             decisions={"specialty": self.specialty, "selected_by_router": active},
             data=llm_data,
-            handoff_to=["lab_advisor_agent", "care_plan_agent"],
+            handoff_to=["lab_advisor_agent"],
             confidence=0.65 if active else 0.45,
         )
 

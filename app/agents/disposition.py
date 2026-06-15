@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from app.agents.base import HospitalAgent
 from app.agents.context import HospitalAgentResult, HospitalContext
+from app.agents.rules import selected_specialties
+from app.tools import ClinicalToolRegistry
 
 
 class DispositionCoordinatorAgent(HospitalAgent):
     name = "disposition_coordinator_agent"
     role = "disposition_coordinator"
+
+    def __init__(self, tools: ClinicalToolRegistry | None = None) -> None:
+        self.tools = tools or ClinicalToolRegistry()
 
     def run(
         self,
@@ -29,6 +34,10 @@ class DispositionCoordinatorAgent(HospitalAgent):
                 "Review test results when available.",
                 "Return for reassessment if red-flag symptoms develop.",
             ]
+        review_request = self.tools.human_review_request.run(
+            urgency,
+            selected_specialties(previous),
+        )
 
         return self.ready(
             summary=f"Disposition coordinator selected {decision}.",
@@ -40,6 +49,7 @@ class DispositionCoordinatorAgent(HospitalAgent):
                 },
                 "monitoring_plan": monitoring,
             },
-            handoff_to=["final_hospital_report_agent"],
+            data={"tool_results": [review_request]},
+            handoff_to=["admission_coordinator_agent"],
             confidence=0.78,
         )

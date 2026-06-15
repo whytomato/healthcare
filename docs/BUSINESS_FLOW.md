@@ -1,151 +1,142 @@
 # 业务流程说明
 
-本文档描述当前 Agent Hospital-lite 的业务流程。系统目标是展示一个可运行的 healthcare 多 agent 服务闭环，而不是只运行单个问诊 prompt。
+当前系统同时推进两条线：一条是 Python 侧的 Agent Hospital workflow，另一条是 `backend/` 内的 Spring Boot 多模块微服务骨架。
 
-## 系统层次
+## 微服务链路
 
 ```text
-Kotlin Spring Boot Backend
-  -> 接收请求
-  -> 创建任务
-  -> 发布 Kafka 消息
-  -> 监听结果并更新任务状态
+encounter-service
+  -> REST 创建 Patient Encounter / AI task
+  -> 持久化 patient_encounters
+  -> 发布 Kafka healthcare.encounter.created
 
-Kafka
-  -> ai.symptom.query
-  -> ai.symptom.result
+triage-service
+  -> 消费 healthcare.encounter.created
+  -> 执行分诊评估
+  -> 发布 Kafka ai.symptom.query
 
 Python AI Worker
-  -> 消费任务
+  -> 消费 ai.symptom.query
   -> 运行 HospitalOrchestrator
-  -> 返回 workflow result
+  -> 执行过程中发布 ai.workflow.progress
+  -> 发布 ai.symptom.result
 
-Python Hospital Workflow
-  -> 调用医院角色 agent
-  -> 角色 agent 可以调用内部 tool
+Hospital Role Agents
+  -> 在具体角色需要时调用 PatientHistoryLookupTool
+  -> PatientHistoryLookupTool 按 patientId 查询 clinical-record-service 的 Patient History Summary
+  -> 通过 ClinicalToolRegistry 自主调用或跳过 guideline、lab、imaging、medication、bed、referral、follow-up、human-review 等内部 tool
+
+encounter-service
+  -> 消费 ai.workflow.progress
+  -> 持久化 workflow_progress_events
+  -> 消费 ai.symptom.result
+  -> 更新任务状态和 workflow result，并保存到 Postgres
+
+clinical-record-service
+  -> 消费 ai.symptom.result
+  -> 持久化 workflow_result_records
+  -> 保存结构化病历、agent path、workflow decisions、handoff timeline、care pathway、AI consultation、final report
+  -> 提供 taskId 查询接口和 patientId 历史病历摘要接口
+
+care-coordination-service
+  -> POST /api/care/coordination-plans
+  -> 生成 followUpActions、referralActions、admissionActions、humanReviewRequired
 ```
 
-## Agent 和 Tool 的边界
+## 持久化数据
 
-Agent 是医院业务角色，负责做决策、产生交接信息、推动流程继续向下走。比如护士分诊、全科医生、专科医生、药房安全、随访协调。
-
-Tool 是 agent 内部使用的能力，负责完成一个具体功能。比如 `AIConsultationTool` 可以做症状抽取、知识检索和 LLM 咨询综合，但它本身不是顶层医院角色。
-
-因此当前结构是：
+本地演示使用 `infra/docker-compose.kafka.yml` 启动 Kafka 和 Docker Postgres。默认连接为：
 
 ```text
-app/agents/       顶层医院角色 agent
-app/tools/        agent 内部工具
-app/workflows/    工作流编排
+jdbc:postgresql://localhost:5432/healthcare
+user / password
 ```
 
-## Agent Hospital-lite Flow
+当前落库边界：
 
 ```text
-IntakeAgent
-  -> 记录患者本次就诊文本
+encounter-service
+  patient_encounters
+  -> taskId、状态、患者/医生标识、原始主诉、workflow result JSON
 
-AppointmentAgent
-  -> 判断就诊类型和优先级
+encounter-service
+  workflow_progress_events
+  -> taskId、agent、event type、decision、decision scope、target agents、parallel group、event index
 
-TriageNurseAgent
-  -> 检查紧急程度和危险信号
-
-  -> high urgency:
-     EmergencyPhysicianAgent
-     -> 识别即时安全行动，进入急诊分支
-
-  -> standard urgency:
-     GeneralPractitionerAgent
-     -> 进入普通门诊分支
-
-GeneralPractitionerAgent
-  -> 做全科初评，判断是否需要专科会诊
-
-SpecialistRouterAgent
-  -> 根据病例文本选择需要激活的专科角色，不再默认运行所有专科
-
-RespiratorySpecialistAgent / CardiologySpecialistAgent /
-InfectiousDiseaseSpecialistAgent / NeurologySpecialistAgent
-  -> 只在被 SpecialistRouterAgent 选中时产生对应专科视角的会诊意见
-
-AIConsultationTool
-  -> 被 GeneralPractitionerAgent 作为内部工具调用
-  -> 内部执行症状抽取、知识检索和 LLM 咨询综合
-
-LabAdvisorAgent
-  -> 给出检查建议
-
-PharmacySafetyAgent
-  -> 做 demo 级别的用药安全检查
-
-CarePlanAgent
-  -> 汇总诊疗计划
-
-FollowUpAgent
-  -> 在普通门诊分支给出随访计划
-
-DispositionCoordinatorAgent
-  -> 汇总分诊、检查、药房和随访信息，决定急诊复评或门诊随访等 demo 级去向
-
-FinalHospitalReportAgent
-  -> 生成最终 workflow report
+clinical-record-service
+  workflow_result_records
+  -> taskId、patientId、状态、executed_path、workflow_decisions、handoff_timeline、专科选择、care_pathway、AI consultation、final_report、raw_result
 ```
 
-当前 workflow 是有分支的：
+## 当前后端接口
 
 ```text
-TriageNurseAgent
-  -> emergency_branch
-     -> EmergencyPhysicianAgent
-     -> GeneralPractitionerAgent
-     -> SpecialistRouterAgent
-     -> selected SpecialistAgents
-     -> LabAdvisorAgent
-     -> PharmacySafetyAgent
-     -> DispositionCoordinatorAgent
-     -> FinalHospitalReportAgent
+encounter-service
+  POST /api/ai/symptom-query
+  GET  /api/ai/tasks/{taskId}
+  GET  /api/ai/tasks/{taskId}/progress
 
-  -> outpatient_branch
-     -> GeneralPractitionerAgent
-     -> SpecialistRouterAgent
-     -> selected SpecialistAgents
-     -> LabAdvisorAgent
-     -> PharmacySafetyAgent
-     -> CarePlanAgent
-     -> FollowUpAgent
-     -> DispositionCoordinatorAgent
-     -> FinalHospitalReportAgent
+triage-service
+  POST /api/triage/assess
+  GET  /api/triage/health
+
+clinical-record-service
+  POST /api/records/workflow-results
+  GET  /api/records/{taskId}
+  GET  /api/records/patients/{patientId}/history
+
+care-coordination-service
+  POST /api/care/coordination-plans
+  GET  /health
 ```
 
-`HospitalOrchestrator` 会在输出中返回 `executed_path` 和 `workflow_decisions`，用于展示实际执行路径和每个分支选择的原因。
-
-## LLM 使用位置
-
-可使用 LLM 的角色 agent：
+## 当前 Kafka Topics
 
 ```text
-GeneralPractitionerAgent
+healthcare.encounter.created
+  encounter-service 发布
+  triage-service 消费
+
+ai.symptom.query
+  triage-service 发布
+  Python AI worker 消费
+
+ai.workflow.progress
+  Python AI worker 发布
+  encounter-service 消费
+
+ai.symptom.result
+  Python AI worker 发布
+  encounter-service 消费
+  clinical-record-service 消费
+```
+
+## Agent / Tool / Policy 边界
+
+```text
+Agent:
+  医院业务角色，负责产生结构化交接信息和业务判断。
+
+Tool:
+  agent 内部使用的能力，例如知识检索、LLM 咨询综合。
+
+Policy / Planner:
+  workflow 规划和路由策略，例如 HospitalWorkflowPlanner。
+```
+
+## 当前 LLM 使用位置
+
+LLM-capable role agents：
+
+```text
 EmergencyPhysicianAgent
+GeneralPractitionerAgent
 RespiratorySpecialistAgent
 CardiologySpecialistAgent
 InfectiousDiseaseSpecialistAgent
 NeurologySpecialistAgent
 CarePlanAgent
 FinalHospitalReportAgent
-```
-
-规则或确定性 agent：
-
-```text
-IntakeAgent
-AppointmentAgent
-TriageNurseAgent
-SpecialistRouterAgent
-LabAdvisorAgent
-PharmacySafetyAgent
-FollowUpAgent
-DispositionCoordinatorAgent
 ```
 
 内部 tool 中也可以使用 LLM：
@@ -156,27 +147,66 @@ AIConsultationTool
   -> LlmClient
 ```
 
-## Demo 命令
+## 当前分支
 
-Mock LLM demo：
+```text
+RegistrationAgent
+  -> IntakeAgent
+  -> NurseVitalsAgent
 
-```powershell
-python -B -m app.main `
-  --case-text "fever, cough, chest discomfort and confusion" `
-  --patient-id p001 `
-  --doctor-id d001 `
-  --output outputs\hospital_mock_demo.json `
-  --mock-llm `
-  --print-json
+AppointmentAgent / NurseVitalsAgent
+  -> TriageNurseAgent
+
+TriageNurseAgent
+  -> emergency_branch
+     -> DepartmentRouterAgent
+     -> EmergencyPhysicianAgent
+     -> GeneralPractitionerAgent
+     -> SpecialistRouterAgent
+     -> selected SpecialistAgents
+     -> DiagnosticOrderAgent
+     -> LabAdvisorAgent
+     -> LabResultInterpreterAgent
+     -> ImagingInterpreterAgent
+     -> PharmacySafetyAgent
+     -> MedicationPlanAgent
+     -> DispositionCoordinatorAgent
+     -> AdmissionCoordinatorAgent
+     -> FinalHospitalReportAgent
+
+  -> outpatient_branch
+     -> DepartmentRouterAgent
+     -> GeneralPractitionerAgent
+     -> SpecialistRouterAgent
+     -> selected SpecialistAgents
+     -> DiagnosticOrderAgent
+     -> LabAdvisorAgent
+     -> LabResultInterpreterAgent
+     -> ImagingInterpreterAgent
+     -> PharmacySafetyAgent
+     -> MedicationPlanAgent
+     -> CarePlanAgent
+     -> FollowUpAgent
+     -> DispositionCoordinatorAgent
+     -> AdmissionCoordinatorAgent
+     -> FinalHospitalReportAgent
 ```
 
-Real LLM demo：
+`HospitalOrchestrator` 现在以 agent 输出的 `handoff_to` 作为真实调度输入：入口从 `registration_agent` 开始，下游 agent 由上游 handoff 推入队列，专科 handoff 可并发执行。`HospitalWorkflowPlanner` 保留为 fallback 和 `workflow_decisions` 捕获边界，不再强行提前执行未被 handoff 的 agent。
 
-```powershell
-python -B -m app.main `
-  --case-text "67-year-old male with fever, productive cough, chest discomfort and confusion." `
-  --patient-id p001 `
-  --doctor-id d001 `
-  --output outputs\hospital_demo.json `
-  --print-json
+`handoff_timeline` 是 workflow 展示主契约，用于记录 agent 完成、行政建档、生命体征、分诊、科室路由、检查医嘱、检验解释、影像解释、用药计划、处置、住院协调、交接、并发专科 fan-out 和 fan-in 汇总事件。
+
+## Patient History Summary
+
+`clinical-record-service` 现在同时承担 demo 级历史病历摘要能力。它按 `patientId` 从已持久化的 `workflow_result_records` 聚合：
+
+```text
+recentEncounters
+knownConditions
+allergies
+currentMedications
+previousDispositions
+lastFinalReports
 ```
+
+`RegistrationAgent`、`PharmacySafetyAgent`、`CarePlanAgent`、`FollowUpAgent` 和 `FinalHospitalReportAgent` 会在各自角色决策中主动调用 `PatientHistoryLookupTool` 查询该摘要。Python AI Worker 不预取病历，也不把病历塞入 `HospitalContext.metadata`。历史病历会影响 registration、pharmacy safety、care plan、follow-up 和 final report，但不会覆盖 Current Encounter Safety Signal，也不会直接降低急诊红旗分流。tool 调用会进入 `handoff_timeline` / realtime progress，前端可以展示哪个 agent 在何时查了病历。

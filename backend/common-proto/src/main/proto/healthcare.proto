@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package healthcare;
+
+option java_package = "com.example.healthcare.proto";
+option java_multiple_files = true;
+
+message TriageAssessmentRequest {
+  string encounterId = 1;
+  string patientId = 2;
+  string caseText = 3;
+  string language = 4;
+}
+
+message TriageAssessmentResponse {
+  string encounterId = 1;
+  string urgencyLevel = 2;
+  string recommendedDepartment = 3;
+  repeated string redFlags = 4;
+}
+
+service TriageAssessmentService {
+  rpc AssessTriage(TriageAssessmentRequest) returns (TriageAssessmentResponse);
+}

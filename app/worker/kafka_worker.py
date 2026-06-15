@@ -13,6 +13,7 @@ from app.workflows.hospital import HospitalOrchestrator
 
 DEFAULT_QUERY_TOPIC = "ai.symptom.query"
 DEFAULT_RESULT_TOPIC = "ai.symptom.result"
+DEFAULT_PROGRESS_TOPIC = "ai.workflow.progress"
 
 
 def main() -> None:
@@ -22,6 +23,7 @@ def main() -> None:
     parser.add_argument("--bootstrap-servers", default=None, help="Kafka bootstrap servers.")
     parser.add_argument("--query-topic", default=DEFAULT_QUERY_TOPIC)
     parser.add_argument("--result-topic", default=DEFAULT_RESULT_TOPIC)
+    parser.add_argument("--progress-topic", default=DEFAULT_PROGRESS_TOPIC)
     parser.add_argument("--group-id", default="healthcare-ai-worker")
     args = parser.parse_args()
 
@@ -42,6 +44,7 @@ def main() -> None:
         bootstrap_servers=args.bootstrap_servers or os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
         query_topic=args.query_topic,
         result_topic=args.result_topic,
+        progress_topic=args.progress_topic,
         group_id=args.group_id,
     )
 
@@ -51,14 +54,24 @@ def run_once_file(path: Path) -> SymptomQueryResult:
     return process_task(SymptomQueryTask(**payload))
 
 
-def process_task(task: SymptomQueryTask) -> SymptomQueryResult:
+def process_task(
+    task: SymptomQueryTask,
+    progress_publisher=None,
+    patient_history_client=None,
+) -> SymptomQueryResult:
+    def publish_progress(event: dict[str, Any]) -> None:
+        if progress_publisher is not None:
+            progress_publisher(to_backend_progress_payload(task.task_id, event))
+
     try:
         result = HospitalOrchestrator().run(
             case_text=task.case_text,
             patient_id=task.patient_id,
             doctor_id=task.doctor_id,
             language=task.language,
+            progress_publisher=publish_progress if progress_publisher is not None else None,
         )
+        result["input_metadata"] = task.metadata
         final_status = (
             result["agent_results"][-1]["status"] if result.get("agent_results") else "failed"
         )
@@ -79,6 +92,7 @@ def run_kafka_worker(
     bootstrap_servers: str,
     query_topic: str,
     result_topic: str,
+    progress_topic: str,
     group_id: str,
 ) -> None:
     try:
@@ -122,7 +136,15 @@ def run_kafka_worker(
             language=payload.get("language", "zh-CN"),
             metadata=payload.get("metadata", {}),
         )
-        result = process_task(task)
+
+        def publish_progress(event: dict[str, Any]) -> None:
+            producer.send(progress_topic, event)
+            producer.flush()
+
+        result = process_task(
+            task,
+            progress_publisher=publish_progress,
+        )
         producer.send(result_topic, to_backend_result_payload(result))
         producer.flush()
         print(f"processed Kafka task {task.task_id}: {result.status}")
@@ -134,6 +156,22 @@ def to_backend_result_payload(result: SymptomQueryResult) -> dict[str, Any]:
         "status": result.status,
         "result": result.result,
         "errorMessage": result.error_message,
+    }
+
+
+def to_backend_progress_payload(task_id: str, event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "taskId": task_id,
+        "eventType": event.get("event_type"),
+        "agent": event.get("agent"),
+        "decision": event.get("decision"),
+        "decisionScope": event.get("decision_scope"),
+        "reason": event.get("reason"),
+        "targetAgents": event.get("target_agents", []),
+        "parallelGroup": event.get("parallel_group"),
+        "payload": event.get("payload"),
+        "durationMs": event.get("duration_ms"),
+        "eventIndex": event.get("event_index"),
     }
 
 

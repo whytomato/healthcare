@@ -1,0 +1,37 @@
+server:
+  port: 8081
+
+healthcare:
+  kafka:
+    enabled: true
+    encounter-topic: healthcare.encounter.created
+    symptom-result-topic: ai.symptom.result
+    workflow-progress-topic: ai.workflow.progress
+
+spring:
+  application:
+    name: encounter-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/healthcare
+    username: user
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+  kafka:
+    bootstrap-servers: 127.0.0.1:9092
+    consumer:
+      group-id: healthcare-backend
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        spring.json.add.type.headers: false
+    listener:
+      missing-topics-fatal: false

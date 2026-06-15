@@ -28,5 +28,5 @@ class LabAdvisorAgent(HospitalAgent):
             summary="Lab advisor recommended diagnostic workup items.",
             recommendations=tests,
             decisions={"recommended_tests": tests},
-            handoff_to=["pharmacy_safety_agent", "care_plan_agent"],
+            handoff_to=["diagnostic_order_agent"],
         )

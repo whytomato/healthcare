@@ -1,0 +1,941 @@
+<template>
+  <main class="app-shell">
+    <aside class="sidebar">
+      <section class="brand">
+        <div class="brand-mark">
+          <Hospital :size="26" />
+        </div>
+        <div>
+          <h1>Healthcare Workbench</h1>
+          <p>门诊就诊 · 多 Agent 流程演示</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">
+          <FilePlus2 :size="18" />
+          <h2>创建 Patient Encounter</h2>
+        </div>
+
+        <label class="field">
+          <span>Patient ID</span>
+          <input v-model="form.patientId" autocomplete="off" />
+        </label>
+
+        <label class="field">
+          <span>Doctor ID</span>
+          <input v-model="form.doctorId" autocomplete="off" />
+        </label>
+
+        <label class="field">
+          <span>Language</span>
+          <select v-model="form.language">
+            <option value="zh-CN">zh-CN</option>
+            <option value="en-US">en-US</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Chief Complaint</span>
+          <textarea v-model="form.caseText" rows="7" />
+        </label>
+
+        <div class="button-row">
+          <button class="primary-button" :disabled="isCreating || !form.caseText.trim()" @click="createEncounter">
+            <Loader2 v-if="isCreating" class="spin" :size="18" />
+            <Send v-else :size="18" />
+            <span>{{ isCreating ? "提交中" : "提交就诊" }}</span>
+          </button>
+          <button class="ghost-button" @click="refreshTasks">
+            <RefreshCw :size="18" />
+          </button>
+        </div>
+      </section>
+
+      <section class="panel compact">
+        <div class="panel-title">
+          <ClipboardList :size="18" />
+          <h2>Demo Cases</h2>
+        </div>
+        <div class="demo-case-list">
+          <button
+            v-for="demoCase in demoCases"
+            :key="demoCase.name"
+            class="demo-case"
+            @click="applyDemoCase(demoCase)"
+          >
+            <span class="demo-case-name">{{ demoCase.name }}</span>
+            <span class="demo-case-text">{{ demoCase.preview }}</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel compact">
+        <div class="panel-title">
+          <ListChecks :size="18" />
+          <h2>Recent Tasks</h2>
+        </div>
+        <div class="task-list">
+          <button
+            v-for="task in tasks"
+            :key="task.taskId"
+            class="task-item"
+            :class="{ active: task.taskId === selectedTaskId }"
+            @click="selectTask(task.taskId)"
+          >
+            <span class="task-main">{{ task.patientId || "unknown patient" }}</span>
+            <span class="task-sub">{{ shortId(task.taskId) }} · {{ task.status }}</span>
+          </button>
+          <p v-if="tasks.length === 0" class="muted">暂无任务</p>
+        </div>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Current Encounter</p>
+          <h2>{{ selectedTaskId ? shortId(selectedTaskId) : "等待创建或选择任务" }}</h2>
+        </div>
+        <div class="topbar-actions">
+          <span class="service-pill" :class="serviceStatus.encounter ? 'ok' : 'warn'">
+            <CircleDot :size="13" />
+            Encounter
+          </span>
+          <span class="service-pill" :class="serviceStatus.record ? 'ok' : 'warn'">
+            <CircleDot :size="13" />
+            Records
+          </span>
+          <button class="ghost-button" :disabled="!selectedTaskId || isCurrentTaskPolling" @click="pollSelectedTask">
+            <RefreshCw :class="{ spin: isCurrentTaskPolling }" :size="18" />
+          </button>
+        </div>
+      </header>
+
+      <section v-if="errorMessage" class="alert">
+        <TriangleAlert :size="18" />
+        <span>{{ errorMessage }}</span>
+      </section>
+
+      <section class="metrics-grid">
+        <article class="metric">
+          <span>Status</span>
+          <strong>{{ currentTask?.status || "-" }}</strong>
+        </article>
+        <article class="metric">
+          <span>Patient</span>
+          <strong>{{ currentTask?.patientId || "-" }}</strong>
+        </article>
+        <article class="metric">
+          <span>Doctor</span>
+          <strong>{{ currentTask?.doctorId || "-" }}</strong>
+        </article>
+        <article class="metric">
+          <span>Specialties</span>
+          <strong>{{ selectedSpecialtiesText }}</strong>
+        </article>
+      </section>
+
+      <HospitalJourneyOverview
+        :stages="journeyStages"
+        :progress-text="journeyProgressText"
+        :progress-percent="journeyProgressPercent"
+        :stats="workflowStats"
+      />
+
+      <WorkflowDisplayPanel
+        :timeline="timeline"
+        :timeline-caption="timelineCaption"
+        :workflow-name="workflowName"
+        :selected-task-id="selectedTaskId"
+        :live-flow-title="liveFlowTitle"
+        :live-stages="liveStages"
+        :executed-path="executedPath"
+        :displayed-decisions="displayedDecisions"
+      />
+    </section>
+
+    <ClinicalRecordPane
+      :patient-history="patientHistory"
+      :clinical-record="clinicalRecord"
+      :current-task-updated-at="currentTask?.updatedAt"
+      :disposition-text="dispositionText"
+      :final-report-text="finalReportText"
+      :final-report-html="finalReportHtml"
+      :compact-record-json="compactRecordJson"
+    />
+  </main>
+</template>
+
+<script setup lang="ts">
+import MarkdownIt from "markdown-it";
+import { computed, onMounted, reactive, ref } from "vue";
+import ClinicalRecordPane from "./components/ClinicalRecordPane.vue";
+import HospitalJourneyOverview from "./components/HospitalJourneyOverview.vue";
+import WorkflowDisplayPanel from "./components/WorkflowDisplayPanel.vue";
+import {
+  CircleDot,
+  ClipboardList,
+  FilePlus2,
+  Hospital,
+  ListChecks,
+  Loader2,
+  RefreshCw,
+  Send,
+  TriangleAlert
+} from "lucide-vue-next";
+
+type TaskStatus = "RECEIVED" | "PUBLISHED" | "COMPLETED" | "NEEDS_DATA" | "FAILED";
+
+type AiTask = {
+  taskId: string;
+  status: TaskStatus;
+  caseText: string;
+  question?: string;
+  doctorId?: string;
+  patientId?: string;
+  language?: string;
+  result?: WorkflowResult;
+  errorMessage?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type TimelineEvent = {
+  event_type?: string;
+  agent?: string;
+  target_agents?: string[];
+  decision?: string;
+  decision_scope?: string;
+  reason?: string;
+  payload?: Record<string, unknown>;
+  duration_ms?: number;
+  event_index?: number;
+};
+
+type WorkflowDecision = {
+  decision?: string;
+  made_by?: string;
+  agent?: string;
+  reason?: string;
+};
+
+type WorkflowResult = {
+  workflow?: string;
+  executed_path?: string[];
+  workflow_decisions?: WorkflowDecision[];
+  selected_specialties?: string[];
+  disposition?: unknown;
+  care_pathway?: unknown;
+  ai_consultation?: unknown;
+  final_report?: Record<string, unknown>;
+  handoff_timeline?: TimelineEvent[];
+  agent_results?: Record<string, unknown>[];
+};
+
+type ClinicalRecord = {
+  taskId: string;
+  status: string;
+  executedPath?: string[];
+  workflowDecisions?: WorkflowDecision[];
+  handoffTimeline?: TimelineEvent[];
+  selectedSpecialties?: string[];
+  carePathway?: unknown;
+  aiConsultation?: unknown;
+  finalReport?: Record<string, unknown>;
+  rawResult?: WorkflowResult;
+  errorMessage?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type PatientHistoryEncounter = {
+  taskId: string;
+  status: string;
+  updatedAt?: string;
+  selectedSpecialties?: string[];
+  disposition?: string;
+  reportExcerpt?: string;
+};
+
+type PatientHistorySummary = {
+  patientId: string;
+  recentEncounters: PatientHistoryEncounter[];
+  knownConditions: string[];
+  allergies: string[];
+  currentMedications: string[];
+  previousDispositions: string[];
+  lastFinalReports: string[];
+};
+
+type WorkflowProgressEvent = {
+  taskId: string;
+  eventType: string;
+  agent?: string;
+  decision?: string;
+  decisionScope?: string;
+  reason?: string;
+  targetAgents?: string[];
+  parallelGroup?: string;
+  payload?: Record<string, unknown>;
+  durationMs?: number;
+  eventIndex: number;
+  createdAt?: string;
+};
+
+type DemoCase = {
+  name: string;
+  preview: string;
+  patientId: string;
+  doctorId: string;
+  language: string;
+  caseText: string;
+};
+
+const terminalStatuses = new Set<TaskStatus>(["COMPLETED", "FAILED", "NEEDS_DATA"]);
+const markdown = new MarkdownIt({
+  breaks: true,
+  html: false,
+  linkify: true,
+  typographer: true
+});
+
+const hospitalStages = [
+  {
+    agent: "registration_agent",
+    label: "Registration",
+    description: "患者建档、复诊识别和行政信息检查"
+  },
+  {
+    agent: "intake_agent",
+    label: "Patient Intake",
+    description: "采集主诉和患者上下文"
+  },
+  {
+    agent: "nurse_vitals_agent",
+    label: "Nurse Vitals",
+    description: "采集生命体征并识别异常信号"
+  },
+  {
+    agent: "appointment_agent",
+    label: "Appointment Classification",
+    description: "判断门诊或急诊优先级"
+  },
+  {
+    agent: "triage_nurse_agent",
+    label: "Triage Nurse",
+    description: "识别紧急程度和红色警示"
+  },
+  {
+    agent: "department_router_agent",
+    label: "Department Routing",
+    description: "选择急诊、全科或专科候选科室"
+  },
+  {
+    agent: "specialist_router_agent",
+    label: "Specialist Routing",
+    description: "选择需要并发会诊的专科"
+  },
+  {
+    agent: "parallel_specialists",
+    label: "Parallel Consultation",
+    description: "多专科并发生成会诊意见"
+  },
+  {
+    agent: "diagnostic_order_agent",
+    label: "Diagnostic Orders",
+    description: "生成检验、影像和床旁评估医嘱"
+  },
+  {
+    agent: "lab_imaging",
+    label: "Lab and Imaging Interpretation",
+    description: "解释检验和影像路径，形成下游风险提示"
+  },
+  {
+    agent: "medication_plan_agent",
+    label: "Medication Planning",
+    description: "药房安全复核后形成 demo 级用药计划"
+  },
+  {
+    agent: "admission_coordinator_agent",
+    label: "Admission Coordination",
+    description: "判断门诊随访、急诊留观或住院评估路径"
+  },
+  {
+    agent: "final_hospital_report_agent",
+    label: "Final Report",
+    description: "汇总最终医院工作流程报告"
+  }
+] as const;
+
+const journeyStageDefinitions = [
+  {
+    key: "registration",
+    label: "Registration",
+    detail: "建档与基本信息",
+    agents: ["registration_agent", "intake_agent", "nurse_vitals_agent"]
+  },
+  {
+    key: "triage",
+    label: "Triage",
+    detail: "门诊/急诊优先级",
+    agents: ["appointment_agent", "triage_nurse_agent"]
+  },
+  {
+    key: "routing",
+    label: "Routing",
+    detail: "科室与专科分流",
+    agents: ["department_router_agent", "specialist_router_agent"]
+  },
+  {
+    key: "consultation",
+    label: "Consultation",
+    detail: "医生与并发专科会诊",
+    agents: [
+      "emergency_physician_agent",
+      "general_practitioner_agent",
+      "respiratory_specialist_agent",
+      "cardiology_specialist_agent",
+      "infectious_disease_specialist_agent",
+      "neurology_specialist_agent"
+    ]
+  },
+  {
+    key: "diagnostics",
+    label: "Diagnostics",
+    detail: "检查医嘱与结果解释",
+    agents: ["diagnostic_order_agent", "lab_advisor_agent", "lab_result_interpreter_agent", "imaging_interpreter_agent"]
+  },
+  {
+    key: "medication",
+    label: "Medication",
+    detail: "药房安全与用药计划",
+    agents: ["pharmacy_safety_agent", "medication_plan_agent"]
+  },
+  {
+    key: "disposition",
+    label: "Disposition",
+    detail: "随访、转诊或住院协调",
+    agents: ["care_plan_agent", "follow_up_agent", "disposition_coordinator_agent", "admission_coordinator_agent"]
+  },
+  {
+    key: "report",
+    label: "Report",
+    detail: "最终病历报告",
+    agents: ["final_hospital_report_agent"]
+  }
+] as const;
+
+const form = reactive({
+  patientId: "p001",
+  doctorId: "d001",
+  language: "zh-CN",
+  caseText: "A 67-year-old male has fever, productive cough, chest discomfort and confusion."
+});
+
+const demoCases: DemoCase[] = [
+  {
+    name: "急诊多专科",
+    preview: "胸痛、发热、意识混乱，触发急诊和多专科会诊",
+    patientId: "p-emergency-001",
+    doctorId: "d-er-001",
+    language: "zh-CN",
+    caseText: "A 67-year-old male has fever, productive cough, chest discomfort, shortness of breath and confusion. He looks acutely ill and the family reports worsening symptoms over the last 12 hours."
+  },
+  {
+    name: "普通门诊",
+    preview: "咳嗽、发热、无明显红旗，触发门诊路径",
+    patientId: "p-outpatient-001",
+    doctorId: "d-gp-001",
+    language: "zh-CN",
+    caseText: "A 34-year-old female has cough, low-grade fever, sore throat and fatigue for three days. She is alert, able to drink fluids, and reports no chest pain, confusion or severe shortness of breath."
+  },
+  {
+    name: "低风险随访",
+    preview: "复诊咨询和轻症症状，突出随访/处置流程",
+    patientId: "p-followup-001",
+    doctorId: "d-followup-001",
+    language: "zh-CN",
+    caseText: "A 45-year-old male requests follow-up after a recent outpatient visit for mild seasonal allergies. Symptoms are improving with mild nasal congestion and no fever, chest pain, dyspnea or neurologic symptoms."
+  }
+];
+
+const tasks = ref<AiTask[]>([]);
+const currentTask = ref<AiTask | null>(null);
+const clinicalRecord = ref<ClinicalRecord | null>(null);
+const patientHistory = ref<PatientHistorySummary | null>(null);
+const progressEvents = ref<TimelineEvent[]>([]);
+const selectedTaskId = ref("");
+const errorMessage = ref("");
+const isCreating = ref(false);
+const pollingTaskId = ref<string | null>(null);
+const serviceStatus = reactive({
+  encounter: false,
+  record: false
+});
+let pollGeneration = 0;
+
+const workflowResult = computed<WorkflowResult | null>(() => {
+  return currentTask.value?.result || clinicalRecord.value?.rawResult || null;
+});
+
+const finalTimeline = computed<TimelineEvent[]>(() => {
+  return clinicalRecord.value?.handoffTimeline || workflowResult.value?.handoff_timeline || [];
+});
+
+const timeline = computed<TimelineEvent[]>(() => {
+  return mergeTimelineEvents(progressEvents.value, finalTimeline.value);
+});
+
+const progressCompletedAgents = computed<string[]>(() => {
+  const seen = new Set<string>();
+  return progressEvents.value
+    .filter((event) => event.event_type === "agent_completed" && event.agent)
+    .map((event) => event.agent as string)
+    .filter((agent) => {
+      if (seen.has(agent)) {
+        return false;
+      }
+      seen.add(agent);
+      return true;
+    });
+});
+
+const executedPath = computed<string[]>(() => {
+  return clinicalRecord.value?.executedPath || workflowResult.value?.executed_path || progressCompletedAgents.value;
+});
+
+const workflowDecisions = computed<WorkflowDecision[]>(() => {
+  return clinicalRecord.value?.workflowDecisions || workflowResult.value?.workflow_decisions || [];
+});
+
+const displayedDecisions = computed<WorkflowDecision[]>(() => {
+  const timelineDecisions = timeline.value
+    .filter((event) => event.event_type === "decision_made" && event.decision)
+    .map((event) => ({
+      decision: event.decision,
+      made_by: event.agent,
+      agent: event.agent,
+      reason: event.reason
+    }));
+  const seen = new Set<string>();
+  return [...timelineDecisions, ...workflowDecisions.value].filter((decision) => {
+    const key = `${decision.made_by || decision.agent || "workflow"}:${decision.decision}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+});
+
+const selectedSpecialtiesText = computed(() => {
+  const specialties = clinicalRecord.value?.selectedSpecialties || workflowResult.value?.selected_specialties || [];
+  return specialties.length ? specialties.join(", ") : "-";
+});
+
+const workflowName = computed(() => workflowResult.value?.workflow || "agent_hospital_lite");
+
+const isCurrentTaskPolling = computed(() => {
+  return Boolean(selectedTaskId.value && pollingTaskId.value === selectedTaskId.value);
+});
+
+const timelineCaption = computed(() => {
+  if (timeline.value.length) {
+    return `${timeline.value.length} events · ${timelineAgentCount.value} agents`;
+  }
+  if (selectedTaskId.value) {
+    return `Live polling · ${currentTask.value?.status || "UNKNOWN"}`;
+  }
+  return "Waiting for encounter";
+});
+
+const timelineAgentCount = computed(() => {
+  if (executedPath.value.length) {
+    return executedPath.value.length;
+  }
+  return new Set(timeline.value.map((event) => event.agent).filter(Boolean)).size;
+});
+
+const completedAgentSet = computed(() => {
+  return new Set([
+    ...executedPath.value,
+    ...timeline.value
+      .filter((event) => event.event_type === "agent_completed" && event.agent)
+      .map((event) => event.agent as string)
+  ]);
+});
+
+const journeyStages = computed(() => {
+  const completed = completedAgentSet.value;
+  const firstWaitingIndex = journeyStageDefinitions.findIndex((stage) => {
+    return !stage.agents.some((agent) => completed.has(agent));
+  });
+  const activeIndex = selectedTaskId.value
+    ? firstWaitingIndex === -1
+      ? journeyStageDefinitions.length - 1
+      : firstWaitingIndex
+    : -1;
+
+  return journeyStageDefinitions.map((stage, index) => {
+    const isDone = stage.agents.some((agent) => completed.has(agent));
+    return {
+      ...stage,
+      state: isDone ? "done" : index === activeIndex ? "active" : "waiting"
+    };
+  });
+});
+
+const journeyProgressPercent = computed(() => {
+  if (!journeyStages.value.length) {
+    return 0;
+  }
+  const done = journeyStages.value.filter((stage) => stage.state === "done").length;
+  return Math.round((done / journeyStages.value.length) * 100);
+});
+
+const journeyProgressText = computed(() => {
+  if (!selectedTaskId.value) {
+    return "创建或选择一个 Patient Encounter 后显示完整医院流程。";
+  }
+  const activeStage = journeyStages.value.find((stage) => stage.state === "active");
+  if (journeyProgressPercent.value === 100) {
+    return "医院多 Agent 流程已完成，最终记录可用于回看。";
+  }
+  return activeStage ? `当前阶段：${activeStage.label} · ${activeStage.detail}` : "正在同步 workflow progress。";
+});
+
+const workflowStats = computed(() => {
+  return {
+    agentEvents: timeline.value.filter((event) => event.event_type === "agent_completed").length,
+    decisionEvents: timeline.value.filter((event) => event.event_type === "decision_made").length,
+    parallelBranches: timeline.value.filter((event) => event.event_type?.includes("parallel")).length
+  };
+});
+
+const liveFlowTitle = computed(() => {
+  if (!currentTask.value) return "等待后端任务状态";
+  if (currentTask.value.status === "PUBLISHED") return "AI worker 正在执行医院多 Agent workflow";
+  if (currentTask.value.status === "RECEIVED") return "Patient Encounter 已创建，等待发布到 Kafka";
+  if (currentTask.value.status === "FAILED") return "Workflow 执行失败";
+  if (currentTask.value.status === "NEEDS_DATA") return "Workflow 需要补充信息";
+  return "正在同步 workflow record";
+});
+
+const liveStages = computed(() => {
+  const completed = new Set(executedPath.value);
+  const hasCompletedPath = completed.size > 0;
+  const activeIndex = currentTask.value?.status === "RECEIVED" ? 0 : 3;
+
+  return hospitalStages.map((stage, index) => {
+    const stageAgents = stage.agent === "parallel_specialists"
+      ? ["respiratory_specialist_agent", "cardiology_specialist_agent", "infectious_disease_specialist_agent", "neurology_specialist_agent"]
+      : stage.agent === "lab_imaging"
+        ? ["lab_result_interpreter_agent", "imaging_interpreter_agent"]
+        : [stage.agent];
+    const isDone = stageAgents.some((agent) => completed.has(agent));
+    return {
+      ...stage,
+      state: hasCompletedPath
+        ? isDone
+          ? "done"
+          : "waiting"
+        : index < activeIndex
+          ? "done"
+          : index === activeIndex
+            ? "active"
+            : "waiting"
+    };
+  });
+});
+
+const finalReportText = computed(() => {
+  const result = workflowResult.value;
+  return extractFirstFinalReportText([
+    clinicalRecord.value?.finalReport,
+    result?.final_report,
+    result?.agent_results?.find((item) => item.agent === "final_hospital_report_agent"),
+    result?.agent_results?.find((item) => item.agent === "final_hospital_report_agent")?.data
+  ]);
+});
+
+const finalReportHtml = computed(() => markdown.render(finalReportText.value));
+
+const dispositionText = computed(() => {
+  const disposition = workflowResult.value?.disposition;
+  if (!disposition) return "-";
+  if (typeof disposition === "string") return disposition;
+  if (typeof disposition === "object") {
+    const value = disposition as Record<string, unknown>;
+    return String(value.disposition || value.decision || value.status || "-");
+  }
+  return String(disposition);
+});
+
+const compactRecordJson = computed(() => {
+  if (!clinicalRecord.value) return "{}";
+  return JSON.stringify(
+    {
+      taskId: clinicalRecord.value.taskId,
+      status: clinicalRecord.value.status,
+      executedPath: clinicalRecord.value.executedPath,
+      selectedSpecialties: clinicalRecord.value.selectedSpecialties,
+      updatedAt: clinicalRecord.value.updatedAt
+    },
+    null,
+    2
+  );
+});
+
+onMounted(async () => {
+  await Promise.all([checkHealth(), refreshTasks()]);
+});
+
+async function createEncounter() {
+  isCreating.value = true;
+  errorMessage.value = "";
+  try {
+    const task = await requestJson<AiTask>("/api/ai/symptom-query", {
+      method: "POST",
+      body: JSON.stringify({
+        caseText: form.caseText,
+        question: "Run hospital consultation workflow",
+        patientId: form.patientId,
+        doctorId: form.doctorId,
+        language: form.language
+      })
+    });
+    selectedTaskId.value = task.taskId;
+    currentTask.value = task;
+    clinicalRecord.value = null;
+    await loadPatientHistory(task.patientId);
+    progressEvents.value = [];
+    await refreshTasks();
+    void startTaskPolling(task.taskId);
+  } catch (error) {
+    setError(error);
+  } finally {
+    isCreating.value = false;
+  }
+}
+
+function applyDemoCase(demoCase: DemoCase) {
+  form.patientId = demoCase.patientId;
+  form.doctorId = demoCase.doctorId;
+  form.language = demoCase.language;
+  form.caseText = demoCase.caseText;
+}
+
+async function refreshTasks() {
+  try {
+    tasks.value = await requestJson<AiTask[]>("/api/ai/tasks");
+    tasks.value.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  } catch (error) {
+    setError(error);
+  }
+}
+
+async function selectTask(taskId: string) {
+  selectedTaskId.value = taskId;
+  currentTask.value = tasks.value.find((task) => task.taskId === taskId) || null;
+  clinicalRecord.value = null;
+  patientHistory.value = null;
+  await loadPatientHistory(currentTask.value?.patientId);
+  progressEvents.value = [];
+  await startTaskPolling(taskId);
+}
+
+async function pollSelectedTask() {
+  if (!selectedTaskId.value) {
+    return;
+  }
+  await startTaskPolling(selectedTaskId.value);
+}
+
+async function startTaskPolling(taskId: string) {
+  const runId = ++pollGeneration;
+  pollingTaskId.value = taskId;
+  errorMessage.value = "";
+  try {
+    const deadline = Date.now() + 300000;
+    while (Date.now() < deadline && isActivePollingRun(taskId, runId)) {
+      const task = await requestJson<AiTask>(`/api/ai/tasks/${taskId}`);
+      if (!isActivePollingRun(taskId, runId)) {
+        return;
+      }
+      currentTask.value = task;
+      await loadPatientHistory(task.patientId);
+      await loadProgress(task.taskId);
+      if (terminalStatuses.has(task.status)) {
+        await loadClinicalRecord(task.taskId);
+        await loadProgress(task.taskId);
+        await refreshTasks();
+        return;
+      }
+      await delay(800);
+    }
+    errorMessage.value = "任务 5 分钟内未完成，可以继续手动刷新。";
+  } catch (error) {
+    if (isActivePollingRun(taskId, runId)) {
+      setError(error);
+    }
+  } finally {
+    if (pollGeneration === runId) {
+      pollingTaskId.value = null;
+    }
+  }
+}
+
+async function loadClinicalRecord(taskId: string) {
+  try {
+    const record = await requestJson<ClinicalRecord>(`/api/records/${taskId}`);
+    if (selectedTaskId.value === taskId) {
+      clinicalRecord.value = record;
+    }
+  } catch {
+    if (selectedTaskId.value === taskId) {
+      clinicalRecord.value = null;
+    }
+  }
+}
+
+async function loadPatientHistory(patientId?: string) {
+  if (!patientId) {
+    patientHistory.value = null;
+    return;
+  }
+  try {
+    patientHistory.value = await requestJson<PatientHistorySummary>(`/api/records/patients/${patientId}/history`);
+  } catch {
+    patientHistory.value = null;
+  }
+}
+
+async function loadProgress(taskId: string) {
+  try {
+    const events = (await requestJson<WorkflowProgressEvent[]>(`/api/ai/tasks/${taskId}/progress`)).map(toTimelineEvent);
+    if (selectedTaskId.value !== taskId) {
+      return;
+    }
+    if ((events.length || !progressEvents.value.length) && events.length >= progressEvents.value.length) {
+      progressEvents.value = events;
+    }
+  } catch {
+    if (selectedTaskId.value === taskId && !progressEvents.value.length) {
+      progressEvents.value = [];
+    }
+  }
+}
+
+function isActivePollingRun(taskId: string, runId: number) {
+  return pollGeneration === runId && selectedTaskId.value === taskId;
+}
+
+async function checkHealth() {
+  const [encounter, record] = await Promise.allSettled([
+    requestJson<{ status: string }>("/api/ai/health"),
+    requestJson<{ status: string }>("/api/records/health")
+  ]);
+  serviceStatus.encounter = encounter.status === "fulfilled";
+  serviceStatus.record = record.status === "fulfilled";
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json"
+    },
+    ...init
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText} for ${url}`);
+  }
+  return (await response.json()) as T;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function setError(error: unknown) {
+  errorMessage.value = error instanceof Error ? error.message : String(error);
+}
+
+function shortId(taskId: string) {
+  return taskId ? `${taskId.slice(0, 8)}...${taskId.slice(-4)}` : "-";
+}
+
+function toTimelineEvent(event: WorkflowProgressEvent): TimelineEvent {
+  return {
+    event_type: event.eventType,
+    agent: event.agent,
+    target_agents: event.targetAgents,
+    decision: event.decision,
+    decision_scope: event.decisionScope,
+    reason: event.reason,
+    payload: event.payload,
+    duration_ms: event.durationMs ?? undefined,
+    event_index: event.eventIndex
+  };
+}
+
+function mergeTimelineEvents(progress: TimelineEvent[], finalEvents: TimelineEvent[]): TimelineEvent[] {
+  if (!progress.length) {
+    return finalEvents;
+  }
+  if (!finalEvents.length) {
+    return progress;
+  }
+  const merged = new Map<string, TimelineEvent>();
+  for (const event of [...progress, ...finalEvents]) {
+    merged.set(timelineIdentity(event), event);
+  }
+  return [...merged.values()].sort((a, b) => (a.event_index ?? 0) - (b.event_index ?? 0));
+}
+
+function timelineIdentity(event: TimelineEvent) {
+  if (event.event_index !== undefined) {
+    return String(event.event_index);
+  }
+  return `${event.event_type || "event"}:${event.agent || "workflow"}:${event.decision || ""}:${event.target_agents?.join(",") || ""}`;
+}
+
+function extractFirstFinalReportText(candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    const text = extractFinalReportText(candidate);
+    if (text.trim()) {
+      return text;
+    }
+  }
+  return "";
+}
+
+function extractFinalReportText(report: unknown): string {
+  if (typeof report === "string") {
+    return report;
+  }
+  if (!report || typeof report !== "object") {
+    return "";
+  }
+  const value = report as Record<string, unknown>;
+  for (const key of ["summary", "report_summary", "markdown", "content", "text"]) {
+    if (typeof value[key] === "string") {
+      return value[key] as string;
+    }
+  }
+  const data = value.data;
+  if (data && typeof data === "object") {
+    const dataValue = data as Record<string, unknown>;
+    for (const key of ["report_summary", "summary", "markdown", "content", "text"]) {
+      if (typeof dataValue[key] === "string") {
+        return dataValue[key] as string;
+      }
+    }
+  }
+  if (Array.isArray(value.findings) && typeof value.findings[0] === "string") {
+    return value.findings[0];
+  }
+  return "";
+}
+
+</script>
