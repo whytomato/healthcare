@@ -2,22 +2,7 @@ from __future__ import annotations
 
 from app.agents.base import HospitalAgent
 from app.agents.context import HospitalAgentResult, HospitalContext
-from app.agents.rules import matched_terms
-
-
-VITAL_RISK_TERMS = {
-    "chest discomfort",
-    "chest pain",
-    "shortness of breath",
-    "confusion",
-    "high fever",
-    "severe",
-    "胸痛",
-    "胸闷",
-    "呼吸困难",
-    "意识模糊",
-    "高热",
-}
+from app.policies.clinical_policy import assess_patient_encounter
 
 
 class NurseVitalsAgent(HospitalAgent):
@@ -29,7 +14,7 @@ class NurseVitalsAgent(HospitalAgent):
         context: HospitalContext,
         previous: list[HospitalAgentResult],
     ) -> HospitalAgentResult:
-        risk_terms = matched_terms(context.case_text, VITAL_RISK_TERMS)
+        risk_terms = assess_patient_encounter(context.case_text).vital_risk_terms
         status = "abnormal" if risk_terms else "stable"
         recommended = (
             ["blood pressure", "heart rate", "respiratory rate", "temperature", "oxygen saturation"]

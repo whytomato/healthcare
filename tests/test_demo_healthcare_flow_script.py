@@ -13,14 +13,10 @@ def test_demo_script_submits_encounter_and_polls_until_completed(monkeypatch) ->
     writes: list[tuple[Path, dict]] = []
     responses = [
         {"taskId": "task-001", "status": "PUBLISHED"},
-        {"taskId": "task-001", "status": "PUBLISHED", "result": None},
+        {"taskId": "task-001", "status": "PUBLISHED"},
         {
             "taskId": "task-001",
             "status": "COMPLETED",
-            "result": {
-                "workflow": "agent_hospital_lite",
-                "executed_path": ["intake_agent", "final_hospital_report_agent"],
-            },
         },
     ]
 
@@ -74,6 +70,15 @@ def test_demo_script_documents_service_start_order() -> None:
     assert "clinical-record-service" in source
 
 
+def test_demo_script_exposes_named_manual_demo_cases() -> None:
+    demo = importlib.import_module("scripts.demo_healthcare_flow")
+
+    assert "emergency_multi_specialty" in [
+        item["id"] for item in demo.demo_cases()
+    ]
+    assert demo.demo_case("standard_outpatient")["patientId"] == "p-outpatient-001"
+
+
 def test_demo_script_can_verify_clinical_record_storage(monkeypatch) -> None:
     demo = importlib.import_module("scripts.demo_healthcare_flow")
     output_path = Path("outputs/demo_healthcare_flow.record.test.json")
@@ -84,16 +89,16 @@ def test_demo_script_can_verify_clinical_record_storage(monkeypatch) -> None:
         {
             "taskId": "task-002",
             "status": "COMPLETED",
-            "result": {
-                "workflow": "agent_hospital_lite",
-                "executed_path": ["intake_agent", "final_hospital_report_agent"],
-            },
         },
         None,
         {
             "taskId": "task-002",
             "status": "ready",
             "executedPath": ["intake_agent", "final_hospital_report_agent"],
+            "rawResult": {
+                "workflow": "agent_hospital_lite",
+                "executed_path": ["intake_agent", "final_hospital_report_agent"],
+            },
         },
     ]
 

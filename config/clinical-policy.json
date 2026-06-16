@@ -1,0 +1,116 @@
+{
+  "urgentTerms": [
+    "chest discomfort",
+    "chest pain",
+    "shortness of breath",
+    "confusion",
+    "severe headache",
+    "neck stiffness",
+    "high fever",
+    "seizure",
+    "hemoptysis",
+    "胸痛",
+    "胸闷",
+    "呼吸困难",
+    "意识模糊",
+    "高热",
+    "抽搐",
+    "咯血",
+    "颈项强直"
+  ],
+  "vitalRiskTerms": [
+    "chest discomfort",
+    "chest pain",
+    "shortness of breath",
+    "confusion",
+    "high fever",
+    "severe",
+    "胸痛",
+    "胸闷",
+    "呼吸困难",
+    "意识模糊",
+    "高热"
+  ],
+  "specialtyTerms": {
+    "respiratory": [
+      "cough",
+      "fever",
+      "sputum",
+      "shortness of breath",
+      "咳嗽",
+      "发热"
+    ],
+    "cardiology": [
+      "chest discomfort",
+      "chest pain",
+      "troponin",
+      "palpitation",
+      "胸痛",
+      "胸闷"
+    ],
+    "infectious_disease": [
+      "fever",
+      "infection",
+      "sepsis",
+      "high fever",
+      "高热",
+      "感染"
+    ],
+    "neurology": [
+      "confusion",
+      "headache",
+      "seizure",
+      "意识模糊",
+      "抽搐"
+    ]
+  },
+  "specialtyRecommendations": {
+    "respiratory": "Assess respiratory infection, hypoxia risk, and need for chest imaging.",
+    "cardiology": "Assess acute coronary syndrome risk when chest symptoms are present.",
+    "infectious_disease": "Assess severe infection risk and consider pathogen testing.",
+    "neurology": "Assess altered mental status, meningitis signs, seizure risk, or intracranial causes."
+  },
+  "negationCues": {
+    "english": [
+      "no evidence of",
+      "negative for",
+      "not experiencing",
+      "denies",
+      "denied",
+      "deny",
+      "without",
+      "free of",
+      "absence of",
+      "no"
+    ],
+    "chinese": [
+      "没有",
+      "未见",
+      "未出现",
+      "否认",
+      "不伴",
+      "无",
+      "未"
+    ]
+  },
+  "contrastMarkers": [
+    " but ",
+    " however ",
+    " though ",
+    " except ",
+    "但",
+    "但是",
+    "不过"
+  ],
+  "sentenceBoundaries": [
+    ".",
+    "?",
+    "!",
+    "\n",
+    ";",
+    "。",
+    "？",
+    "！",
+    "；"
+  ]
+}

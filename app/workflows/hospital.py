@@ -365,7 +365,7 @@ class _HandoffTimeline:
             }
         )
         for event in _decision_events(result):
-            self._append(event)
+            self._append(_role_scoped_decision_event(result, event))
         for event in _tool_events(result):
             self._append(event)
         if result.handoff_to:
@@ -374,6 +374,14 @@ class _HandoffTimeline:
                     "event_type": "handoff_created",
                     "agent": result.agent,
                     "target_agents": result.handoff_to,
+                    "reason": _handoff_reason(result),
+                    "payload": {
+                        "decision_type": "role_scoped_agent_decision",
+                        "role": result.role,
+                        "handoff_to": list(result.handoff_to),
+                        "tool_choices": _tool_choices(result),
+                        "evidence": _decision_evidence(result),
+                    },
                 }
             )
 
@@ -473,6 +481,10 @@ def _decision_events(result: Any) -> list[dict[str, Any]]:
                         "urgency_level": urgency,
                         "recommended_department": decisions.get("recommended_department"),
                         "red_flags": decisions.get("red_flags", []),
+                        "selected_branch": {
+                            "target": "department_router_agent",
+                            "reason": "high triage urgency",
+                        },
                     },
                 }
             ]
@@ -487,10 +499,35 @@ def _decision_events(result: Any) -> list[dict[str, Any]]:
                     "urgency_level": urgency,
                     "recommended_department": decisions.get("recommended_department"),
                     "red_flags": decisions.get("red_flags", []),
+                    "selected_branch": {
+                        "target": "department_router_agent",
+                        "reason": "standard triage urgency",
+                    },
                 },
             }
         ]
     if agent == "department_router_agent":
+        urgency = decisions.get("urgency_level")
+        selected_target = (
+            "emergency_physician_agent"
+            if urgency == "high"
+            else "general_practitioner_agent"
+        )
+        selected_reason = (
+            "high triage urgency routes to emergency physician first"
+            if urgency == "high"
+            else "standard urgency routes to general practitioner first"
+        )
+        skipped_target = (
+            "general_practitioner_agent"
+            if urgency == "high"
+            else "emergency_physician_agent"
+        )
+        skipped_reason = (
+            "high urgency prioritizes emergency physician review before routine GP path"
+            if urgency == "high"
+            else "standard urgency routes to general practitioner first"
+        )
         return [
             {
                 "event_type": "decision_made",
@@ -501,6 +538,16 @@ def _decision_events(result: Any) -> list[dict[str, Any]]:
                 "payload": {
                     "primary_department": decisions.get("primary_department"),
                     "candidate_departments": decisions.get("candidate_departments", []),
+                    "selected_branch": {
+                        "target": selected_target,
+                        "reason": selected_reason,
+                    },
+                    "skipped_branches": [
+                        {
+                            "target": skipped_target,
+                            "reason": skipped_reason,
+                        }
+                    ],
                 },
             }
         ]
@@ -513,7 +560,17 @@ def _decision_events(result: Any) -> list[dict[str, Any]]:
                 "decision": "specialist_consultation_branch",
                 "decision_scope": "routing",
                 "reason": ", ".join(selected) if selected else "no specialty selected",
-                "payload": {"selected_specialties": selected},
+                "payload": {
+                    "selected_specialties": selected,
+                    "parallel_branch": len(selected) > 1,
+                    "selected_branches": [
+                        {
+                            "target": f"{specialty}_specialist_agent",
+                            "reason": f"{specialty} specialty selected by role router",
+                        }
+                        for specialty in selected
+                    ],
+                },
             }
         ]
     if agent == "diagnostic_order_agent":
@@ -630,7 +687,56 @@ def _decision_events(result: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _role_scoped_decision_event(
+    result: Any,
+    event: dict[str, Any],
+) -> dict[str, Any]:
+    payload = event.setdefault("payload", {})
+    payload.setdefault("decision_type", "role_scoped_agent_decision")
+    payload.setdefault("role", result.role)
+    payload.setdefault("handoff_to", list(result.handoff_to))
+    payload.setdefault("tool_choices", _tool_choices(result))
+    payload.setdefault("evidence", _decision_evidence(result))
+    return event
+
+
 def _tool_events(result: Any) -> list[dict[str, Any]]:
+    tool_results = _agent_tool_results(result)
+    events = []
+    for tool_result in tool_results:
+        tool_name = tool_result.get("tool", "unknown_tool")
+        status = tool_result.get("status", "unknown")
+        reason = _tool_reason(result.agent, tool_result)
+        raw_payload = (
+            tool_result.get("payload", {})
+            if isinstance(tool_result.get("payload"), dict)
+            else {}
+        )
+        events.append(
+            {
+                "event_type": "tool_skipped" if status == "skipped" else "tool_invoked",
+                "agent": result.agent,
+                "decision": tool_name,
+                "decision_scope": "tool_use",
+                "reason": reason,
+                "payload": {
+                    **raw_payload,
+                    "tool": tool_name,
+                    "status": status,
+                    "choice": _tool_choice(status),
+                    "selection_reason": reason,
+                    "decision_type": "role_scoped_agent_decision",
+                    "role": result.role,
+                    "handoff_to": list(result.handoff_to),
+                    "summary": tool_result.get("summary"),
+                    "patientId": tool_result.get("patientId"),
+                },
+            }
+        )
+    return events
+
+
+def _agent_tool_results(result: Any) -> list[dict[str, Any]]:
     tool_results = []
     history_lookup = result.data.get("patient_history_lookup")
     if isinstance(history_lookup, dict):
@@ -638,39 +744,66 @@ def _tool_events(result: Any) -> list[dict[str, Any]]:
     extra_tools = result.data.get("tool_results", [])
     if isinstance(extra_tools, list):
         tool_results.extend(item for item in extra_tools if isinstance(item, dict))
+    return tool_results
 
-    events = []
-    for tool_result in tool_results:
+
+def _tool_choices(result: Any) -> list[dict[str, Any]]:
+    choices = []
+    for tool_result in _agent_tool_results(result):
         tool_name = tool_result.get("tool", "unknown_tool")
         status = tool_result.get("status", "unknown")
-        events.append(
+        choices.append(
             {
-                "event_type": "tool_skipped" if status == "skipped" else "tool_invoked",
-                "agent": result.agent,
-                "decision": tool_name,
-                "decision_scope": "tool_use",
+                "tool": tool_name,
+                "status": status,
+                "choice": _tool_choice(status),
                 "reason": _tool_reason(result.agent, tool_result),
-                "payload": {
-                    "tool": tool_name,
-                    "status": status,
-                    "summary": tool_result.get("summary"),
-                    "patientId": tool_result.get("patientId"),
-                    **(
-                        tool_result.get("payload", {})
-                        if isinstance(tool_result.get("payload"), dict)
-                        else {}
-                    ),
-                },
             }
         )
-    return events
+    return choices
+
+
+def _tool_choice(status: str) -> str:
+    if status == "skipped":
+        return "skipped"
+    if status == "unavailable":
+        return "unavailable"
+    return "selected"
+
+
+def _decision_evidence(result: Any) -> list[str]:
+    evidence = ["current_encounter_context"]
+    if result.decisions:
+        evidence.append("role_decision_fields")
+    if result.findings:
+        evidence.append("role_findings")
+    if result.recommendations:
+        evidence.append("role_recommendations")
+    if result.handoff_to:
+        evidence.append("selected_handoff_targets")
+    tool_results = _agent_tool_results(result)
+    if tool_results:
+        evidence.append("agent_tool_results")
+    if any(
+        tool_result.get("tool") == "patient_history_lookup"
+        for tool_result in tool_results
+    ):
+        evidence.append("patient_history_summary")
+    return evidence
+
+
+def _handoff_reason(result: Any) -> str:
+    targets = ", ".join(result.handoff_to)
+    if not targets:
+        return ""
+    return f"{result.role} selected downstream handoff target(s): {targets}."
 
 
 def _tool_reason(agent_name: str, tool_result: dict[str, Any]) -> str:
-    if tool_result.get("summary"):
-        return str(tool_result["summary"])
     if tool_result.get("tool") == "patient_history_lookup":
         return _history_tool_reason(agent_name)
+    if tool_result.get("summary"):
+        return str(tool_result["summary"])
     return f"{agent_name} selected {tool_result.get('tool', 'an internal tool')}."
 
 

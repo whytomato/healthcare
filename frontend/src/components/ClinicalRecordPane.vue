@@ -25,9 +25,25 @@
       </dl>
       <div v-if="patientHistory?.lastFinalReports.length" class="history-excerpts">
         <span>Latest report excerpt</span>
-        <p>{{ patientHistory.lastFinalReports[0] }}</p>
+        <div class="markdown-report history-markdown" v-html="historyReportExcerptHtml" />
       </div>
       <p v-else class="muted">No prior clinical summary available.</p>
+
+      <div v-if="patientHistory?.recentEncounters.length" class="history-encounters">
+        <span>Recent encounters</span>
+        <article v-for="encounter in patientHistory.recentEncounters" :key="encounter.taskId">
+          <strong>{{ encounter.disposition || encounter.status || "Prior encounter" }}</strong>
+          <small>{{ formatTime(encounter.updatedAt) }}</small>
+          <p v-if="encounter.selectedSpecialties?.length">
+            Specialties: {{ historyListText(encounter.selectedSpecialties) }}
+          </p>
+          <div
+            v-if="encounter.reportExcerpt"
+            class="markdown-report history-markdown"
+            v-html="encounterReportExcerptHtml(encounter)"
+          />
+        </article>
+      </div>
     </section>
 
     <section class="panel record-summary">
@@ -72,52 +88,12 @@
 
 <script setup lang="ts">
 import { ClipboardPlus, Database, FileText, History } from "lucide-vue-next";
-
-type WorkflowDecision = {
-  decision?: string;
-  made_by?: string;
-  agent?: string;
-  reason?: string;
-};
-
-type TimelineEvent = {
-  event_type?: string;
-  agent?: string;
-  target_agents?: string[];
-  decision?: string;
-  decision_scope?: string;
-  reason?: string;
-  payload?: Record<string, unknown>;
-  duration_ms?: number;
-  event_index?: number;
-};
-
-type WorkflowResult = {
-  workflow?: string;
-  executed_path?: string[];
-  workflow_decisions?: WorkflowDecision[];
-  selected_specialties?: string[];
-  disposition?: unknown;
-  care_pathway?: unknown;
-  ai_consultation?: unknown;
-  final_report?: Record<string, unknown>;
-  handoff_timeline?: TimelineEvent[];
-  agent_results?: Record<string, unknown>[];
-};
+import MarkdownIt from "markdown-it";
+import { computed } from "vue";
+import { renderReportMarkdown } from "../reportFormatting";
 
 type ClinicalRecord = {
-  taskId: string;
-  status: string;
-  executedPath?: string[];
-  workflowDecisions?: WorkflowDecision[];
-  handoffTimeline?: TimelineEvent[];
-  selectedSpecialties?: string[];
-  carePathway?: unknown;
-  aiConsultation?: unknown;
-  finalReport?: Record<string, unknown>;
-  rawResult?: WorkflowResult;
-  errorMessage?: string;
-  createdAt?: string;
+  status?: string;
   updatedAt?: string;
 };
 
@@ -131,16 +107,21 @@ type PatientHistoryEncounter = {
 };
 
 type PatientHistorySummary = {
-  patientId: string;
   recentEncounters: PatientHistoryEncounter[];
-  knownConditions: string[];
   allergies: string[];
   currentMedications: string[];
   previousDispositions: string[];
   lastFinalReports: string[];
 };
 
-defineProps<{
+const markdown = new MarkdownIt({
+  breaks: true,
+  html: false,
+  linkify: true,
+  typographer: true
+});
+
+const props = defineProps<{
   patientHistory: PatientHistorySummary | null;
   clinicalRecord: ClinicalRecord | null;
   currentTaskUpdatedAt?: string;
@@ -149,6 +130,10 @@ defineProps<{
   finalReportHtml: string;
   compactRecordJson: string;
 }>();
+
+const historyReportExcerptHtml = computed(() => {
+  return renderMarkdown(props.patientHistory?.lastFinalReports?.[0]);
+});
 
 function formatTime(value?: string) {
   if (!value) return "-";
@@ -162,5 +147,13 @@ function formatTime(value?: string) {
 
 function historyListText(values?: string[]) {
   return values?.length ? values.join(", ") : "-";
+}
+
+function encounterReportExcerptHtml(encounter: PatientHistoryEncounter) {
+  return renderMarkdown(encounter.reportExcerpt);
+}
+
+function renderMarkdown(value?: string) {
+  return renderReportMarkdown(markdown, value);
 }
 </script>

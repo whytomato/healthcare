@@ -53,6 +53,15 @@ def test_readme_documents_care_coordination_service_api() -> None:
 
     assert "POST http://localhost:8084/api/care/coordination-plans" in readme
     assert "GET  http://localhost:8084/health" in readme
+
+
+def test_readme_documents_encounter_and_record_service_boundaries() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "encounter service persists `patient_encounters` and realtime `workflow_progress_events`" in readme
+    assert "`/api/ai/tasks/{taskId}` returns the Patient Encounter task state" in readme
+    assert "not the full workflow result JSON" in readme
+    assert "clinical record service persists the complete `workflow_result_records`" in readme
     assert "followUpActions" in readme
     assert "referralActions" in readme
     assert "admissionActions" in readme

@@ -5,6 +5,7 @@
 ## 文档入口
 
 - [业务流程说明](docs/BUSINESS_FLOW.md)
+- [组会讲解稿](docs/MEETING_GUIDE.md)
 - [项目领域词汇](CONTEXT.md)
 - [Agent 上下文说明](docs/agents/domain.md)
 
@@ -88,7 +89,7 @@ Specialist agents selected by `SpecialistRouterAgent` run as parallel consultati
 
 Workflow output includes `handoff_timeline` as the main display contract for the multi-agent workflow. It records administrative, triage, routing, order, clinical interpretation, medication, disposition, admission, handoff, specialist parallel fan-out, fan-in, `tool_invoked`, and `tool_skipped` events so the UI can render the workflow without reverse-engineering raw agent results.
 
-Internal tools are grouped behind `ClinicalToolRegistry` so role agents can choose whether to use them during their own decisions. Current demo tools include `PatientHistoryLookupTool`, `GuidelineLookupTool`, `LabOrderTool`, `LabResultFetchTool`, `ImagingOrderTool`, `ImagingResultFetchTool`, `MedicationInteractionTool`, `BedAvailabilityTool`, `ReferralSchedulingTool`, `FollowUpSchedulingTool`, `HumanReviewRequestTool`, and `CareCoordinationTool`.
+Internal tools are grouped behind `ClinicalToolRegistry` so role agents can choose whether to use them during their own decisions. Current demo tools include `PatientHistoryLookupTool`, `GuidelineLookupTool`, `LabOrderTool`, `LabResultFetchTool`, `ImagingOrderTool`, `ImagingResultFetchTool`, `MedicationInteractionTool`, `BedAvailabilityTool`, `ReferralSchedulingTool`, `FollowUpSchedulingTool`, `HumanReviewRequestTool`, and `CareCoordinationTool`. Tool outcomes are emitted into the handoff timeline as `tool_invoked` or `tool_skipped`, and service failures such as an unavailable care-coordination service are represented as unavailable tool results instead of crashing the workflow.
 
 `AdmissionCoordinatorAgent` can call `CareCoordinationTool`, which posts to `care-coordination-service` and records the resulting follow-up, referral, admission, and human-review plan in the agent timeline.
 
@@ -223,7 +224,7 @@ Kafka 事件：
 encounter-service -> healthcare.encounter.created -> triage-service
 triage-service    -> ai.symptom.query              -> Python AI worker
 Python AI worker  -> ai.workflow.progress          -> encounter-service
-Python AI worker  -> ai.symptom.result             -> encounter-service
+Python AI worker  -> ai.symptom.result             -> encounter-service status update
 Python AI worker  -> ai.symptom.result             -> clinical-record-service
 ```
 
@@ -238,7 +239,7 @@ GET  http://localhost:8083/api/records/patients/{patientId}/history
 GET  http://localhost:8083/api/records/health
 ```
 
-The encounter service persists `patient_encounters`. The clinical record service persists `workflow_result_records`, including `patientId`, `executed_path`, `workflow_decisions`, `handoff_timeline`, `care_pathway`, `ai_consultation`, and `final_report` for workflow display. It also exposes a Patient History Summary by `patientId`, so hospital role agents can actively call `PatientHistoryLookupTool` for prior encounters, allergies, current medications, previous dispositions, and final-report excerpts during the next workflow.
+The encounter service persists `patient_encounters` and realtime `workflow_progress_events`. It treats `ai.symptom.result` as a status update only: `/api/ai/tasks/{taskId}` returns the Patient Encounter task state, not the full workflow result JSON. The clinical record service persists the complete `workflow_result_records`, including `patientId`, `executed_path`, `workflow_decisions`, `handoff_timeline`, `care_pathway`, `ai_consultation`, `final_report`, and raw workflow result for workflow display. It also exposes a Patient History Summary by `patientId`, so hospital role agents can actively call `PatientHistoryLookupTool` for prior encounters, allergies, current medications, previous dispositions, and final-report excerpts during the next workflow.
 
 care-coordination-service:
 
@@ -265,7 +266,7 @@ npm run dev
 http://127.0.0.1:5173
 ```
 
-前端第一版支持创建 Patient Encounter、轮询任务状态、展示 realtime agent progress、展示 agent handoff timeline、查看 Patient History、clinical record 和 final report。`HospitalJourneyOverview.vue` 负责整体医院流程进度，`WorkflowDisplayPanel.vue` 负责 timeline/path/decisions 区域编排，`AgentTimeline.vue` 负责实时 agent timeline 渲染，`ClinicalRecordPane.vue` 负责 Patient History、Clinical Record、Final Report 和 Record JSON 展示。
+前端支持创建 Patient Encounter、轮询任务状态、展示 realtime agent progress、展示 agent handoff timeline、查看 Patient History、clinical record 和 final report。`HospitalJourneyOverview.vue` 负责整体医院流程进度，`WorkflowDisplayPanel.vue` 负责 timeline/path/graph 区域编排，`AgentTimeline.vue` 负责实时 agent timeline 渲染，`AgentWorkflowGraph.vue` 使用 Vue Flow 展示本次真实 workflow 覆盖图：高亮实线表示实际走过的 agent handoff，虚线表示未触发分支，边标签表示 agent 决策，`Tool nodes` 开关用于查看 tool 调用、跳过和 unavailable。`ClinicalRecordPane.vue` 负责 Patient History、Clinical Record、Final Report 和 Record JSON 展示，并会把历史报告中的结构化 JSON 摘要转换为可读 Markdown。
 
 ## 自动化测试
 

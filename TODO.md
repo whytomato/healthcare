@@ -6,8 +6,8 @@
 
 ### P0：前端展示 bug
 
-- [ ] 修复 `ClinicalRecordPane.vue` 中 Patient History Summary 的渲染 bug，重点检查历史病历摘要、既往 encounters、allergies/current medications/previous dispositions 的空值和数组展示。
-- [ ] 移除 `WorkflowDisplayPanel.vue` 中 timeline 为空时的旧 `live-flow` 阶段列表。Agent Handoff Timeline 区域只保留真实 `AgentTimeline` 事件流；如果还没有 realtime events，只显示简短 loading/empty state，不再展示 Registration、Patient Intake、Nurse Vitals、Appointment Classification 等临时阶段流程。
+- [x] 修复 `ClinicalRecordPane.vue` 中 Patient History Summary 的渲染 bug，重点检查历史病历摘要、既往 encounters、allergies/current medications/previous dispositions 的空值和数组展示。
+- [x] 移除 `WorkflowDisplayPanel.vue` 中 timeline 为空时的旧 `live-flow` 阶段列表。Agent Handoff Timeline 区域只保留真实 `AgentTimeline` 事件流；如果还没有 realtime events，只显示简短 loading/empty state，不再展示 Registration、Patient Intake、Nurse Vitals、Appointment Classification 等临时阶段流程。
 
 ### 待拆解：体验与架构增强
 
@@ -15,14 +15,14 @@
 
 ### P1：流程展示增强
 
-- [ ] 新增 `Agent Workflow Graph` 前端视图，用图形化方式展示每一次 Patient Encounter 的实际 agent workflow：agent 节点、handoff 边、decision 节点、tool 调用节点、parallel fan-out/fan-in 汇合点。
-- [ ] `Agent Workflow Graph` 数据来源优先使用 `handoff_timeline` / realtime progress events，不手写固定医院流程图；同一个病例只展示本次实际触发的 agent 和 tool。
-- [ ] 在 `WorkflowDisplayPanel.vue` 中提供 Timeline / Graph 两种视图切换；Timeline 保留事件细节，Graph 用于汇报时快速看清 agent workflow 和 tool 调用关系。
-- [ ] Graph 视图验收标准：能区分 agent、decision、tool、fan-out、fan-in；tool 节点显示 tool 名称和 ready/skipped/unavailable 状态；点击或悬停节点能看到对应 timeline event 摘要。
+- [x] 新增 `Agent Workflow Graph` 前端视图，用图形化方式展示每一次 Patient Encounter 的实际 agent workflow：agent 节点、handoff 边、decision 节点、tool 调用节点、parallel fan-out/fan-in 汇合点。
+- [x] `Agent Workflow Graph` 数据来源优先使用 `handoff_timeline` / realtime progress events，不手写固定医院流程图；同一个病例只展示本次实际触发的 agent 和 tool。
+- [x] 在 `WorkflowDisplayPanel.vue` 中提供 Timeline / Graph 两种视图切换；Timeline 保留事件细节，Graph 用于汇报时快速看清 agent workflow 和 tool 调用关系。
+- [x] Graph 视图验收标准：能区分 agent、decision、tool、fan-out、fan-in；tool 节点显示 tool 名称和 ready/skipped/unavailable 状态；点击或悬停节点能看到对应 timeline event 摘要。
 
 ### P1：微服务架构优化
 
-- [ ] 明确 `encounter-service` 与 `clinical-record-service` 的职责边界：`encounter-service` 负责 Patient Encounter、task status、realtime progress；`clinical-record-service` 负责 Workflow Record 和 Longitudinal Patient Record，避免两个服务长期重复保存完整 workflow result。
+- [x] 明确 `encounter-service` 与 `clinical-record-service` 的职责边界：`encounter-service` 负责 Patient Encounter、task status、realtime progress；`clinical-record-service` 负责 Workflow Record 和 Longitudinal Patient Record，避免两个服务长期重复保存完整 workflow result。
 - [ ] 整理四个服务的启动和健康检查体验：`encounter-service`、`triage-service`、`clinical-record-service`、`care-coordination-service` 都应有清晰端口、health endpoint、README 启动命令和手动验证命令。
 - [ ] 补齐微服务契约文档：列出 REST API、Kafka topic、输入/输出消息字段、持久化表职责，作为后续扩展服务的边界说明。
 - [ ] 增加演示稳定性脚本：优先做 `scripts/start-all` / `scripts/stop-all` 或 Windows PowerShell 版本，减少手动启动四个服务和 worker 的成本。
@@ -30,13 +30,13 @@
 
 ### P0：Agent Workflow 自主决策
 
-- [ ] 将“自主决策”统一为 `Role-Scoped Agent Decision`：每个关键 Hospital Role Agent 在自己的角色边界内，基于当前 encounter context、上游 handoff、可用 tools 和必要的 patient history 决定下一步，而不是由全局 planner 预先决定完整流程。
-- [ ] 提升可展示决策密度：把关键 agent 的判断显式记录为 `decision_made`，重点覆盖 triage、department routing、specialist routing、diagnostics、pharmacy safety、medication planning、disposition、admission/care coordination。
-- [ ] 强化真实分支差异：普通门诊、急诊、多专科、人工审核、服务不可用 fallback 等路径应在 `handoff_timeline` 和最终 Graph 中呈现出明显不同的 agent path、decision path 和 tool path。
-- [ ] 增强 agent 自主决策可解释性：每个关键 Hospital Role Agent 输出“本角色为什么继续/跳过某个下游 agent 或 tool”的结构化 decision reason，并进入 `handoff_timeline`。
-- [ ] 增强 tool 选择展示：把当前 tool 调用从“调用结果”提升为“agent 选择了哪些 tool、跳过哪些 tool、为什么跳过”的 timeline 事件，便于 Graph 视图画出 agent -> tool 的决策边。
-- [ ] 增加人工审核分支的可展示路径：当 high-risk、service unavailable、LLM 输出不稳定或 care coordination 需要人工确认时，workflow 应出现 human review decision/tool event，而不是只在最终报告里说明。
-- [ ] 增强 outpatient / emergency / multi-specialty 三类 demo path 的差异：普通门诊不应展示急诊角色，多专科病例应展示并发专科 fan-out/fan-in，急诊病例应展示 emergency physician、diagnostics、pharmacy/admission/care coordination 的完整链路。
+- [x] 将“自主决策”统一为 `Role-Scoped Agent Decision`：每个关键 Hospital Role Agent 在自己的角色边界内，基于当前 encounter context、上游 handoff、可用 tools 和必要的 patient history 决定下一步，而不是由全局 planner 预先决定完整流程。
+- [x] 提升可展示决策密度：把关键 agent 的判断显式记录为 `decision_made`，重点覆盖 triage、department routing、specialist routing、diagnostics、pharmacy safety、medication planning、disposition、admission/care coordination。
+- [x] 强化真实分支差异：普通门诊、急诊、多专科、人工审核、服务不可用 fallback 等路径应在 `handoff_timeline` 和最终 Graph 中呈现出明显不同的 agent path、decision path 和 tool path。
+- [x] 增强 agent 自主决策可解释性：每个关键 Hospital Role Agent 输出“本角色为什么继续/跳过某个下游 agent 或 tool”的结构化 decision reason，并进入 `handoff_timeline`。
+- [x] 增强 tool 选择展示：把当前 tool 调用从“调用结果”提升为“agent 选择了哪些 tool、跳过哪些 tool、为什么跳过”的 timeline 事件，便于 Graph 视图画出 agent -> tool 的决策边。
+- [x] 增加人工审核分支的可展示路径：当 high-risk、service unavailable、LLM 输出不稳定或 care coordination 需要人工确认时，workflow 应出现 human review decision/tool event，而不是只在最终报告里说明。
+- [x] 增强 outpatient / emergency / multi-specialty 三类 demo path 的差异：普通门诊不应展示急诊角色，多专科病例应展示并发专科 fan-out/fan-in，急诊病例应展示 emergency physician、diagnostics、pharmacy/admission/care coordination 的完整链路。
 
 ## P0：完成可展示闭环
 

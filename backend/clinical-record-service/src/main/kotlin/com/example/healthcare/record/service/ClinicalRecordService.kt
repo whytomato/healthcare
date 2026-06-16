@@ -146,7 +146,7 @@ private fun Any?.extractReportText(): String? {
     for (key in listOf("summary", "report_summary", "markdown", "content", "text")) {
         val candidate = value[key]
         if (candidate is String) {
-            return candidate
+            return candidate.extractStructuredJsonSummary() ?: candidate
         }
     }
     val data = value["data"] as? Map<*, *>
@@ -154,10 +154,35 @@ private fun Any?.extractReportText(): String? {
         for (key in listOf("report_summary", "summary", "markdown", "content", "text")) {
             val candidate = data[key]
             if (candidate is String) {
-                return candidate
+                return candidate.extractStructuredJsonSummary() ?: candidate
             }
         }
     }
     val findings = value["findings"] as? List<*>
-    return findings?.firstOrNull()?.toString()
+    return findings?.firstOrNull()?.toString()?.let { it.extractStructuredJsonSummary() ?: it }
+}
+
+private fun String.extractStructuredJsonSummary(): String? {
+    val jsonText = trim().stripJsonFence()
+    if (!jsonText.startsWith("{") || !jsonText.endsWith("}")) {
+        return null
+    }
+    return try {
+        val parsed = ObjectMapper().readValue(jsonText, Map::class.java)
+        val summary = parsed["summary"] as? String
+        summary?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun String.stripJsonFence(): String {
+    val lines = lines()
+    if (lines.size >= 3 &&
+        lines.first().trim().lowercase() in setOf("```json", "```") &&
+        lines.last().trim() == "```"
+    ) {
+        return lines.drop(1).dropLast(1).joinToString("\n").trim()
+    }
+    return trim()
 }

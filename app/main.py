@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from app.demo_cases import demo_case, demo_cases
 from app.llm_client import LlmResult
 from app.workflows.hospital import HospitalOrchestrator
 
@@ -81,7 +82,13 @@ else:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Agent Hospital-lite workflow.")
-    parser.add_argument("--case-text", required=True, help="Patient case text.")
+    parser.add_argument("--case-text", default=None, help="Patient case text.")
+    parser.add_argument(
+        "--demo-case",
+        choices=[item["id"] for item in demo_cases()],
+        default=None,
+        help="Use a fixed manual demo case.",
+    )
     parser.add_argument("--patient-id", default=None, help="Optional patient identifier.")
     parser.add_argument("--doctor-id", default=None, help="Optional doctor identifier.")
     parser.add_argument("--language", default="zh-CN", help="Preferred response language.")
@@ -93,12 +100,16 @@ def main() -> None:
         help="Path for the full JSON result. Defaults to outputs/run_<timestamp>.json.",
     )
     args = parser.parse_args()
+    selected_demo = demo_case(args.demo_case) if args.demo_case else {}
+    case_text = args.case_text or selected_demo.get("caseText")
+    if not case_text:
+        parser.error("--case-text is required unless --demo-case is provided.")
 
     result = build_orchestrator(mock_llm=args.mock_llm).run(
-        case_text=args.case_text,
-        patient_id=args.patient_id,
-        doctor_id=args.doctor_id,
-        language=args.language,
+        case_text=str(case_text),
+        patient_id=args.patient_id or selected_demo.get("patientId"),
+        doctor_id=args.doctor_id or selected_demo.get("doctorId"),
+        language=args.language or selected_demo.get("language", "zh-CN"),
     )
     output_path = write_result_json(result, args.output)
     print_summary(result, output_path)

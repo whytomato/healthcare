@@ -52,7 +52,6 @@ class AiTaskService(
     fun applyResult(message: AiSymptomResultMessage): AiTask {
         val task = repository.findById(message.taskId)
             ?: throw NoSuchElementException("AI task not found: ${message.taskId}")
-        task.result = message.result
         task.errorMessage = message.errorMessage
         task.status = mapWorkerStatus(message.status)
         task.updatedAt = Instant.now()

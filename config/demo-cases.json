@@ -1,0 +1,47 @@
+[
+  {
+    "id": "emergency_multi_specialty",
+    "name": "急诊多专科",
+    "preview": "胸痛、发热、呼吸困难和意识模糊，触发急诊和多专科会诊",
+    "patientId": "p-emergency-001",
+    "doctorId": "d-er-001",
+    "language": "zh-CN",
+    "caseText": "A 67-year-old male has fever, productive cough, chest discomfort, shortness of breath and confusion. He looks acutely ill and the family reports worsening symptoms over the last 12 hours."
+  },
+  {
+    "id": "standard_outpatient",
+    "name": "普通门诊",
+    "preview": "咳嗽、低热、无明显红旗，触发门诊路径",
+    "patientId": "p-outpatient-001",
+    "doctorId": "d-gp-001",
+    "language": "zh-CN",
+    "caseText": "A 34-year-old female has cough, low-grade fever, sore throat and fatigue for three days. She is alert, able to drink fluids, and reports no chest pain, confusion or severe shortness of breath."
+  },
+  {
+    "id": "low_risk_followup",
+    "name": "低风险随访",
+    "preview": "复诊咨询和轻症症状，突出随访和处置流程",
+    "patientId": "p-followup-001",
+    "doctorId": "d-followup-001",
+    "language": "zh-CN",
+    "caseText": "A 45-year-old male requests follow-up after a recent outpatient visit for mild seasonal allergies. Symptoms are improving with mild nasal congestion and no fever, chest pain, dyspnea or neurologic symptoms."
+  },
+  {
+    "id": "human_review",
+    "name": "人工审核",
+    "preview": "高风险红旗和多系统症状，展示 human review tool 被 agent 主动选择",
+    "patientId": "p-review-001",
+    "doctorId": "d-review-001",
+    "language": "zh-CN",
+    "caseText": "A 72-year-old patient reports chest pain, shortness of breath, high fever and confusion after recent medication changes. The family is unsure about allergies and asks whether admission is needed."
+  },
+  {
+    "id": "service_fallback",
+    "name": "服务降级",
+    "preview": "可用于关闭病历或后续安排服务后，展示 tool unavailable fallback",
+    "patientId": "p-fallback-001",
+    "doctorId": "d-fallback-001",
+    "language": "zh-CN",
+    "caseText": "A 52-year-old patient has cough and fever with prior outpatient records expected, but external history or care coordination service may be unavailable during this demo."
+  }
+]

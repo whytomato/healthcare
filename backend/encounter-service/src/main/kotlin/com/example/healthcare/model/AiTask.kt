@@ -10,7 +10,6 @@ data class AiTask(
     var doctorId: String? = null,
     var patientId: String? = null,
     var language: String = "zh-CN",
-    var result: Any? = null,
     var errorMessage: String? = null,
     var createdAt: Instant = Instant.now(),
     var updatedAt: Instant = Instant.now(),

@@ -34,9 +34,6 @@ open class AiTaskEntity(
     @Column(nullable = false)
     var language: String = "zh-CN",
 
-    @Column(name = "result_json", columnDefinition = "text")
-    var resultJson: String? = null,
-
     @Column(name = "error_message")
     var errorMessage: String? = null,
 

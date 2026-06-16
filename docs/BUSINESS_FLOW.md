@@ -30,17 +30,21 @@ encounter-service
   -> 消费 ai.workflow.progress
   -> 持久化 workflow_progress_events
   -> 消费 ai.symptom.result
-  -> 更新任务状态和 workflow result，并保存到 Postgres
+  -> 更新任务状态和错误信息
+  -> encounter-service 只维护 task 状态，不保存完整 workflow result
 
 clinical-record-service
   -> 消费 ai.symptom.result
   -> 持久化 workflow_result_records
+  -> clinical-record-service 负责完整 Workflow Record
   -> 保存结构化病历、agent path、workflow decisions、handoff timeline、care pathway、AI consultation、final report
   -> 提供 taskId 查询接口和 patientId 历史病历摘要接口
 
 care-coordination-service
   -> POST /api/care/coordination-plans
   -> 生成 followUpActions、referralActions、admissionActions、humanReviewRequired
+  -> 不消费 Kafka；由 AdmissionCoordinatorAgent 通过 CareCoordinationTool 同步调用
+  -> 服务不可用时，CareCoordinationTool 返回 unavailable 并生成本地 fallback plan
 ```
 
 ## 持久化数据
@@ -57,7 +61,7 @@ user / password
 ```text
 encounter-service
   patient_encounters
-  -> taskId、状态、患者/医生标识、原始主诉、workflow result JSON
+  -> taskId、状态、患者/医生标识、原始主诉、错误信息
 
 encounter-service
   workflow_progress_events
@@ -118,7 +122,8 @@ Agent:
   医院业务角色，负责产生结构化交接信息和业务判断。
 
 Tool:
-  agent 内部使用的能力，例如知识检索、LLM 咨询综合。
+  agent 内部使用的能力，例如知识检索、LLM 咨询综合、检验/影像/用药/随访/人工审核/照护协调。
+  tool 可以是纯本地 demo 能力，也可以封装对微服务的调用。
 
 Policy / Planner:
   workflow 规划和路由策略，例如 HospitalWorkflowPlanner。
@@ -196,6 +201,8 @@ TriageNurseAgent
 
 `handoff_timeline` 是 workflow 展示主契约，用于记录 agent 完成、行政建档、生命体征、分诊、科室路由、检查医嘱、检验解释、影像解释、用药计划、处置、住院协调、交接、并发专科 fan-out 和 fan-in 汇总事件。
 
+前端 `AgentWorkflowGraph.vue` 使用 Vue Flow 将 `handoff_timeline` 渲染为本次 Patient Encounter 的 workflow 覆盖图。图中 agent 节点表示医院角色，实线表示本次实际 handoff，虚线表示系统存在但本次未触发的分支，边标签显示 agent 决策，tool 节点可按需打开以展示 `tool_invoked` / `tool_skipped` / unavailable。
+
 ## Patient History Summary
 
 `clinical-record-service` 现在同时承担 demo 级历史病历摘要能力。它按 `patientId` 从已持久化的 `workflow_result_records` 聚合：
@@ -210,3 +217,5 @@ lastFinalReports
 ```
 
 `RegistrationAgent`、`PharmacySafetyAgent`、`CarePlanAgent`、`FollowUpAgent` 和 `FinalHospitalReportAgent` 会在各自角色决策中主动调用 `PatientHistoryLookupTool` 查询该摘要。Python AI Worker 不预取病历，也不把病历塞入 `HospitalContext.metadata`。历史病历会影响 registration、pharmacy safety、care plan、follow-up 和 final report，但不会覆盖 Current Encounter Safety Signal，也不会直接降低急诊红旗分流。tool 调用会进入 `handoff_timeline` / realtime progress，前端可以展示哪个 agent 在何时查了病历。
+
+前端 Patient History 面板会把历史 final report excerpt 作为 Markdown 渲染。如果历史记录中保存的是结构化 JSON final report，前端会先提取 `summary`、`findings`、`recommendations`、`handoff_reason` 和 `confidence`，再转换为可读 Markdown，避免把原始 JSON 展示给用户。

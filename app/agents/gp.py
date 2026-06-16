@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.agents.base import LlmBackedHospitalAgent
 from app.agents.context import HospitalAgentResult, HospitalContext
-from app.agents.rules import select_specialties
+from app.policies.clinical_policy import select_specialties
 from app.tools import AIConsultationTool
 
 

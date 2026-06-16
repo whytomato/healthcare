@@ -1,13 +1,21 @@
 package com.example.healthcare.triage.service
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.example.healthcare.triage.model.TriageAssessmentRequest
 import com.example.healthcare.triage.model.TriageAssessmentResponse
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.exists
 import org.springframework.stereotype.Service
 
 @Service
 class TriageAssessmentService {
+    private val policy = ClinicalPolicy.load()
+
     fun assess(request: TriageAssessmentRequest): TriageAssessmentResponse {
-        val redFlags = matchedTerms(request.caseText, urgentTerms)
+        val redFlags = matchedTerms(request.caseText, policy.urgentTerms.toSet())
         val urgencyLevel = if (redFlags.isNotEmpty()) "high" else "standard"
         val department = if (redFlags.isNotEmpty()) "emergency" else "general_medicine"
         return TriageAssessmentResponse(
@@ -48,32 +56,19 @@ class TriageAssessmentService {
             segment = segment.takeLast(96)
         }
 
-        val englishCues = listOf(
-            "no evidence of",
-            "negative for",
-            "not experiencing",
-            "denies",
-            "denied",
-            "deny",
-            "without",
-            "free of",
-            "absence of",
-            "no",
-        )
-        val chineseCues = listOf("没有", "未见", "未出现", "否认", "不伴", "无", "未")
-        return englishCues.any { cuePresent(segment, it) } || chineseCues.any { segment.contains(it) }
+        return policy.negationCues.english.any { cuePresent(segment, it) } ||
+            policy.negationCues.chinese.any { segment.contains(it) }
     }
 
     private fun lastSentenceBoundary(text: String, termStart: Int): Int {
-        val boundaries = listOf(".", "?", "!", "\n", ";", "。", "？", "！", "；")
+        val boundaries = policy.sentenceBoundaries
             .map { text.lastIndexOf(it, startIndex = termStart.coerceAtLeast(0)) }
         val last = boundaries.maxOrNull() ?: -1
         return last + 1
     }
 
     private fun afterLastContrast(segment: String): String {
-        val markers = listOf(" but ", " however ", " though ", " except ", "但", "但是", "不过")
-        val index = markers
+        val index = policy.contrastMarkers
             .map { marker ->
                 val position = segment.lastIndexOf(marker)
                 if (position >= 0) position + marker.length else -1
@@ -91,25 +86,34 @@ class TriageAssessmentService {
 
     companion object {
         const val NEGATED_RED_FLAG_EXAMPLE = "no chest pain, confusion or severe shortness of breath"
-
-        private val urgentTerms = setOf(
-            "chest discomfort",
-            "chest pain",
-            "shortness of breath",
-            "confusion",
-            "severe headache",
-            "neck stiffness",
-            "high fever",
-            "seizure",
-            "hemoptysis",
-            "胸痛",
-            "胸闷",
-            "呼吸困难",
-            "意识模糊",
-            "高热",
-            "抽搐",
-            "咯血",
-            "颈项强直",
-        )
     }
 }
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ClinicalPolicy(
+    val urgentTerms: List<String> = emptyList(),
+    val negationCues: NegationCues = NegationCues(),
+    val contrastMarkers: List<String> = emptyList(),
+    val sentenceBoundaries: List<String> = emptyList(),
+) {
+    companion object {
+        private val mapper = jacksonObjectMapper()
+        private val candidatePaths = listOf(
+            Path.of("config", "clinical-policy.json"),
+            Path.of("..", "config", "clinical-policy.json"),
+            Path.of("..", "..", "config", "clinical-policy.json"),
+        )
+
+        fun load(): ClinicalPolicy {
+            val path = candidatePaths.firstOrNull { it.exists() }
+                ?: error("config/clinical-policy.json was not found")
+            return Files.newBufferedReader(path).use { reader -> mapper.readValue(reader) }
+        }
+    }
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class NegationCues(
+    val english: List<String> = emptyList(),
+    val chinese: List<String> = emptyList(),
+)

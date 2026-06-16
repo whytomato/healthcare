@@ -29,7 +29,10 @@ def hospital_messages(
                 "You are a role agent in an Agent Hospital-lite demo. "
                 "Produce concise clinical decision-support content for doctors. "
                 "Do not claim a final diagnosis or prescribe treatment. "
-                "Return practical findings and handoff-oriented recommendations."
+                "Return only JSON with this schema: "
+                '{"summary": string, "findings": string[], '
+                '"recommendations": string[], "handoff_reason": string, '
+                '"confidence": number}.'
             ),
         },
         {

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.agents.base import LlmBackedHospitalAgent
 from app.agents.context import HospitalAgentResult, HospitalContext
-from app.agents.rules import SPECIALTY_RECOMMENDATIONS
+from app.policies.clinical_policy import SPECIALTY_RECOMMENDATIONS
 
 
 class SpecialistAgent(LlmBackedHospitalAgent):

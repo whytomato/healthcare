@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from app.agents.base import HospitalAgent
 from app.agents.context import HospitalAgentResult, HospitalContext
-from app.agents.rules import selected_specialties
 from app.domain.patient_history import history_list
+from app.policies.workflow_state import selected_specialties
 from app.tools import ClinicalToolRegistry, PatientHistoryLookupTool
 
 

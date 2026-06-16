@@ -17,6 +17,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from app.demo_cases import demo_case, demo_cases
 
 TERMINAL_STATUSES = {"COMPLETED", "FAILED", "NEEDS_DATA"}
 
@@ -26,12 +27,18 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://localhost:8081", help="encounter-service base URL.")
     parser.add_argument(
         "--case-text",
-        default="A 67-year-old male has fever, productive cough, chest discomfort and confusion.",
+        default=None,
         help="Patient encounter text.",
     )
-    parser.add_argument("--patient-id", default="p001")
-    parser.add_argument("--doctor-id", default="d001")
-    parser.add_argument("--language", default="zh-CN")
+    parser.add_argument(
+        "--demo-case",
+        choices=[item["id"] for item in demo_cases()],
+        default="emergency_multi_specialty",
+        help="Fixed manual demo case.",
+    )
+    parser.add_argument("--patient-id", default=None)
+    parser.add_argument("--doctor-id", default=None)
+    parser.add_argument("--language", default=None)
     parser.add_argument("--timeout-seconds", type=int, default=60)
     parser.add_argument("--interval-seconds", type=float, default=2.0)
     parser.add_argument("--output", default="outputs/demo_healthcare_flow.json")
@@ -48,12 +55,13 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    selected_demo = demo_case(args.demo_case) if args.demo_case else {}
     result = run_demo(
         base_url=args.base_url,
-        case_text=args.case_text,
-        patient_id=args.patient_id,
-        doctor_id=args.doctor_id,
-        language=args.language,
+        case_text=args.case_text or selected_demo.get("caseText", ""),
+        patient_id=args.patient_id or selected_demo.get("patientId", "p001"),
+        doctor_id=args.doctor_id or selected_demo.get("doctorId", "d001"),
+        language=args.language or selected_demo.get("language", "zh-CN"),
         timeout_seconds=args.timeout_seconds,
         interval_seconds=args.interval_seconds,
         output_path=Path(args.output),
@@ -160,10 +168,11 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def print_summary(result: dict[str, Any], output_path: Path) -> None:
-    workflow = (result.get("result") or {}).get("workflow") if isinstance(result.get("result"), dict) else None
+    record = result.get("clinicalRecord") if isinstance(result.get("clinicalRecord"), dict) else {}
+    raw_result = record.get("rawResult") if isinstance(record, dict) else None
+    workflow = raw_result.get("workflow") if isinstance(raw_result, dict) else None
     print(f"[done] taskId={result.get('taskId')} status={result.get('status')} workflow={workflow}")
-    if "clinicalRecord" in result:
-        record = result["clinicalRecord"]
+    if record:
         print(f"[record] taskId={record.get('taskId')} status={record.get('status')}")
     print(f"[output] {output_path}")
 

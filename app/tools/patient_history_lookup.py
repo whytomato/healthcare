@@ -9,13 +9,26 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_RECORD_BASE_URL = "http://localhost:8083"
+DEFAULT_RECORD_TIMEOUT_SECONDS = 0.5
 
 
 class PatientHistoryLookupTool:
     """Internal tool used by role agents to retrieve longitudinal patient context."""
 
-    def __init__(self, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout_seconds: float | None = None,
+    ) -> None:
         self.base_url = (base_url or os.getenv("CLINICAL_RECORD_BASE_URL", DEFAULT_RECORD_BASE_URL)).rstrip("/")
+        self.timeout_seconds = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else _env_timeout(
+                "CLINICAL_RECORD_TIMEOUT_SECONDS",
+                DEFAULT_RECORD_TIMEOUT_SECONDS,
+            )
+        )
         self._cache: dict[str, dict[str, Any]] = {}
 
     def run(self, patient_id: str | None) -> dict[str, Any]:
@@ -33,7 +46,7 @@ class PatientHistoryLookupTool:
         url = f"{self.base_url}/api/records/patients/{quote(patient_id, safe='')}/history"
         request = Request(url, headers={"Accept": "application/json"})
         try:
-            with urlopen(request, timeout=3) as response:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
                 summary = json.loads(response.read().decode("utf-8"))
             result = {
                 "tool": "patient_history_lookup",
@@ -65,3 +78,13 @@ def empty_patient_history(patient_id: str | None) -> dict[str, Any]:
         "previousDispositions": [],
         "lastFinalReports": [],
     }
+
+
+def _env_timeout(name: str, default: float) -> float:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        return float(raw_value)
+    except ValueError:
+        return default

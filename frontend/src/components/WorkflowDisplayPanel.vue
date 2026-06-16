@@ -9,34 +9,46 @@
           </div>
           <p>{{ timelineCaption }}</p>
         </div>
-        <span class="status-badge">{{ workflowName }}</span>
+        <div class="panel-actions">
+          <div class="view-toggle" role="tablist" aria-label="Workflow view">
+            <button
+              type="button"
+              :class="{ active: activeWorkflowView === 'timeline' }"
+              @click="activeWorkflowView = 'timeline'"
+            >
+              <ListTree :size="15" />
+              <span>Timeline</span>
+            </button>
+            <button
+              type="button"
+              :class="{ active: activeWorkflowView === 'graph' }"
+              @click="activeWorkflowView = 'graph'"
+            >
+              <GitBranch :size="15" />
+              <span>Graph</span>
+            </button>
+          </div>
+          <span class="status-badge">{{ workflowName }}</span>
+        </div>
       </div>
 
       <AgentTimeline
-        v-if="timeline.length"
+        v-if="timeline.length && activeWorkflowView === 'timeline'"
         :events="timeline"
         :selected-task-id="selectedTaskId"
       />
-      <div v-else-if="selectedTaskId" class="live-flow">
-        <div class="live-flow-head">
+      <AgentWorkflowGraph
+        v-else-if="timeline.length && activeWorkflowView === 'graph'"
+        :events="timeline"
+        :selected-task-id="selectedTaskId"
+      />
+      <div v-else-if="selectedTaskId" class="timeline-empty-state">
+        <div class="timeline-empty-head">
           <Loader2 class="spin" :size="18" />
-          <strong>{{ liveFlowTitle }}</strong>
-        </div>
-        <div class="stage-list">
-          <div v-for="stage in liveStages" :key="stage.agent" class="stage-item" :class="stage.state">
-            <div class="stage-icon">
-              <CheckCircle2 v-if="stage.state === 'done'" :size="16" />
-              <Loader2 v-else-if="stage.state === 'active'" class="spin" :size="16" />
-              <Circle :size="16" v-else />
-            </div>
-            <div>
-              <strong>{{ stage.label }}</strong>
-              <span>{{ stage.description }}</span>
-            </div>
-          </div>
+          <strong>Waiting for realtime agent events</strong>
         </div>
         <p class="live-note">
-          Polling realtime agent progress. Events switch this panel to the real agent timeline and branch decisions.
+          Polling the selected Patient Encounter. The real Agent Handoff Timeline appears as soon as workflow progress events arrive.
         </p>
       </div>
       <div v-else class="empty-state">
@@ -80,7 +92,9 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, BrainCircuit, CheckCircle2, Circle, Loader2, Route, Workflow } from "lucide-vue-next";
+import { ref } from "vue";
+import { Activity, BrainCircuit, GitBranch, ListTree, Loader2, Route, Workflow } from "lucide-vue-next";
+import AgentWorkflowGraph from "./AgentWorkflowGraph.vue";
 import AgentTimeline from "./AgentTimeline.vue";
 
 type TimelineEvent = {
@@ -102,23 +116,16 @@ type WorkflowDecision = {
   reason?: string;
 };
 
-type LiveStage = {
-  agent: string;
-  label: string;
-  description: string;
-  state: "done" | "active" | "waiting";
-};
-
 defineProps<{
   timeline: TimelineEvent[];
   timelineCaption: string;
   workflowName: string;
   selectedTaskId: string;
-  liveFlowTitle: string;
-  liveStages: LiveStage[];
   executedPath: string[];
   displayedDecisions: WorkflowDecision[];
 }>();
+
+const activeWorkflowView = ref<"timeline" | "graph">("timeline");
 
 function formatAgent(agent?: string) {
   if (!agent) return "Workflow";

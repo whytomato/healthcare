@@ -115,3 +115,6 @@ def test_clinical_record_service_exposes_patient_history_summary_by_patient_id()
     assert "currentMedications: List<String>" in summary_text
     assert "previousDispositions: List<String>" in summary_text
     assert "lastFinalReports: List<String>" in summary_text
+    assert "extractStructuredJsonSummary" in service
+    assert "stripJsonFence" in service
+    assert "lines.first().trim().lowercase() in setOf(\"```json\", \"```\")" in service

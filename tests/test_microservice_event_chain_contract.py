@@ -251,3 +251,31 @@ def test_encounter_service_uses_listener_specific_kafka_json_types_for_result_an
     assert "spring.json.value.default.type:" not in application_yml
     assert "spring.json.value.default.type=com.example.healthcare.model.AiSymptomResultMessage" in result_listener
     assert "spring.json.value.default.type=com.example.healthcare.model.WorkflowProgressMessage" in progress_listener
+
+
+def test_encounter_service_tracks_result_status_without_persisting_workflow_result() -> None:
+    entity = Path(
+        "backend/encounter-service/src/main/kotlin/com/example/healthcare/model/AiTaskEntity.kt"
+    ).read_text(encoding="utf-8")
+    model = Path(
+        "backend/encounter-service/src/main/kotlin/com/example/healthcare/model/AiTask.kt"
+    ).read_text(encoding="utf-8")
+    repository = Path(
+        "backend/encounter-service/src/main/kotlin/com/example/healthcare/service/AiTaskRepository.kt"
+    ).read_text(encoding="utf-8")
+    task_service = Path(
+        "backend/encounter-service/src/main/kotlin/com/example/healthcare/service/AiTaskService.kt"
+    ).read_text(encoding="utf-8")
+    record_service = Path(
+        "backend/clinical-record-service/src/main/kotlin/com/example/healthcare/record/service/ClinicalRecordService.kt"
+    ).read_text(encoding="utf-8")
+    docs = Path("docs/BUSINESS_FLOW.md").read_text(encoding="utf-8")
+
+    assert "resultJson" not in entity
+    assert "result: Any?" not in model
+    assert "task.result =" not in task_service
+    assert "resultJson =" not in repository
+    assert "result = resultJson" not in repository
+    assert "rawResultJson" in record_service
+    assert "encounter-service 只维护 task 状态" in docs
+    assert "clinical-record-service 负责完整 Workflow Record" in docs

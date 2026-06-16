@@ -628,6 +628,362 @@ button:disabled {
   font-weight: 800;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.view-toggle {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid #cfdadb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 0;
+  border-right: 1px solid #dce4e5;
+  padding: 0 10px;
+  color: #405351;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.view-toggle button:last-child {
+  border-right: 0;
+}
+
+.view-toggle button.active {
+  color: #ffffff;
+  background: #1f7a68;
+}
+
+.workflow-graph-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.graph-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.graph-title-row strong,
+.graph-title-row span {
+  display: block;
+}
+
+.graph-title-row strong {
+  font-size: 14px;
+}
+
+.graph-title-row span {
+  margin-top: 3px;
+  color: #63706f;
+  font-size: 12px;
+}
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  border: 1px solid #dce4e5;
+  border-radius: 999px;
+  padding: 0 9px;
+  color: #405351;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.graph-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 1px solid #dce4e5;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fbfdfc;
+}
+
+.graph-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  border: 1px solid #dce4e5;
+  border-radius: 6px;
+  padding: 0 9px;
+  color: #405351;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.graph-filters input {
+  width: 14px;
+  height: 14px;
+  accent-color: #1f7a68;
+}
+
+.graph-filters label:has(input:disabled) {
+  color: #97a3a2;
+  background: #f5f7f7;
+}
+
+.legend-line {
+  width: 24px;
+  height: 0;
+  border-top: 3px solid #6d8b87;
+}
+
+.legend-line.edge-skipped,
+.legend-line.edge-tool-skipped {
+  border-top-style: dashed;
+}
+
+.graph-task {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.workflow-graph {
+  height: 620px;
+  overflow: hidden;
+  border: 1px solid #dce4e5;
+  border-radius: 8px;
+  background: #f8fbfb;
+}
+
+.workflow-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.workflow-flow .vue-flow__node {
+  width: 190px;
+  border: 1px solid #cfdadb;
+  border-radius: 8px;
+  padding: 0;
+  color: #17201f;
+  background: #ffffff;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.workflow-node-card {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+}
+
+.workflow-node-card strong,
+.workflow-node-card span,
+.workflow-node-card small,
+.workflow-node-card em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-node-card strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.workflow-node-card small {
+  color: #405351;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.workflow-node-card em {
+  color: #63706f;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.node-kicker {
+  color: #1f7a68;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.workflow-flow .vue-flow__node.selected {
+  border-color: #1f7a68;
+  box-shadow: 0 0 0 3px rgba(31, 122, 104, 0.16);
+}
+
+.workflow-flow .graph-node-agent {
+  border-color: #cfdadb;
+  background: #ffffff;
+}
+
+.workflow-flow .graph-node-executed {
+  border-color: #75b8a9;
+  background: #edf8f5;
+  box-shadow: 0 8px 20px rgba(31, 122, 104, 0.12);
+}
+
+.workflow-flow .graph-node-available {
+  border-style: dashed;
+  border-color: #c8d1d1;
+  color: #63706f;
+  background: #f6f8f8;
+}
+
+.workflow-flow .graph-node-available .node-kicker,
+.workflow-flow .graph-node-available .workflow-node-card em {
+  color: #7b8786;
+}
+
+.workflow-flow .graph-node-has-decision {
+  box-shadow: inset 4px 0 0 #d66f43;
+}
+
+.workflow-flow .graph-node-tool {
+  border-color: #c9dbea;
+  background: #eef6fc;
+}
+
+.workflow-flow .graph-node-selected {
+  border-color: #8db7d8;
+  background: #eef6fc;
+}
+
+.workflow-flow .graph-node-skipped {
+  border-style: dashed;
+  border-color: #e0a99f;
+  color: #7d4036;
+  background: #fff4f2;
+}
+
+.workflow-flow .graph-node-unavailable {
+  border-style: dashed;
+  border-color: #bba3d7;
+  color: #584275;
+  background: #f7f2fb;
+}
+
+.workflow-flow .vue-flow__edge-path {
+  stroke: #6d8b87;
+  stroke-width: 2;
+}
+
+.workflow-flow .vue-flow__edge.animated .vue-flow__edge-path {
+  stroke: #2e6fb3;
+}
+
+.workflow-flow .edge-selected .vue-flow__edge-path,
+.legend-line.edge-selected {
+  stroke: #1f7a68;
+  border-top-color: #1f7a68;
+}
+
+.workflow-flow .edge-available .vue-flow__edge-path,
+.legend-line.edge-available {
+  stroke: #a7b2b1;
+  stroke-dasharray: 7 6;
+  border-top-color: #a7b2b1;
+}
+
+.workflow-flow .edge-skipped .vue-flow__edge-path,
+.legend-line.edge-skipped {
+  stroke: #b54f3a;
+  stroke-dasharray: 6 5;
+  border-top-color: #b54f3a;
+}
+
+.workflow-flow .edge-tool-selected .vue-flow__edge-path,
+.legend-line.edge-tool-selected {
+  stroke: #2e6fb3;
+  border-top-color: #2e6fb3;
+}
+
+.workflow-flow .edge-tool-skipped .vue-flow__edge-path,
+.legend-line.edge-tool-skipped {
+  stroke: #b54f3a;
+  stroke-dasharray: 5 5;
+  border-top-color: #b54f3a;
+}
+
+.workflow-flow .edge-tool-unavailable .vue-flow__edge-path,
+.legend-line.edge-tool-unavailable {
+  stroke: #7f5ca7;
+  stroke-dasharray: 2 4;
+  border-top-color: #7f5ca7;
+}
+
+.workflow-flow .edge-mode-parallel .vue-flow__edge-path {
+  stroke: #7f5ca7;
+}
+
+.workflow-flow .edge-mode-tool .vue-flow__edge-path {
+  stroke-width: 1.8;
+}
+
+.workflow-flow .edge-mode-disposition .vue-flow__edge-path {
+  stroke: #6d7fb3;
+}
+
+.workflow-flow .vue-flow__edge-text {
+  fill: #405351;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.graph-inspector {
+  border: 1px solid #dce4e5;
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #fbfdfc;
+}
+
+.graph-inspector strong,
+.graph-inspector span {
+  display: block;
+}
+
+.graph-inspector span {
+  margin-top: 2px;
+  color: #63706f;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.graph-inspector p {
+  margin: 8px 0 0;
+  color: #405351;
+  line-height: 1.45;
+}
+
 .empty-state {
   display: grid;
   place-items: center;
@@ -637,12 +993,12 @@ button:disabled {
   text-align: center;
 }
 
-.live-flow {
+.timeline-empty-state {
   display: grid;
   gap: 16px;
 }
 
-.live-flow-head {
+.timeline-empty-head {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -651,63 +1007,6 @@ button:disabled {
   padding: 12px;
   color: #174f46;
   background: #edf8f5;
-}
-
-.stage-list {
-  display: grid;
-  gap: 10px;
-}
-
-.stage-item {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #dce4e5;
-  border-radius: 8px;
-  padding: 12px;
-  background: #fbfdfc;
-}
-
-.stage-item.done {
-  border-color: #c7ded8;
-  background: #f2faf8;
-}
-
-.stage-item.active {
-  border-color: #b7d7ef;
-  background: #eff7fc;
-}
-
-.stage-icon {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  color: #63706f;
-  background: #eef3f4;
-}
-
-.stage-item.done .stage-icon {
-  color: #ffffff;
-  background: #1f7a68;
-}
-
-.stage-item.active .stage-icon {
-  color: #ffffff;
-  background: #2e6fb3;
-}
-
-.stage-item strong,
-.stage-item span {
-  display: block;
-}
-
-.stage-item span {
-  margin-top: 3px;
-  color: #63706f;
-  font-size: 13px;
 }
 
 .live-note {
@@ -799,6 +1098,49 @@ button:disabled {
   margin: 6px 0 0;
   color: #304240;
   line-height: 1.45;
+}
+
+.history-encounters {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #edf1f2;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.history-encounters > span {
+  color: #63706f;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.history-encounters article {
+  border: 1px solid #dce4e5;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfdfc;
+}
+
+.history-encounters strong,
+.history-encounters small {
+  display: block;
+}
+
+.history-encounters strong {
+  overflow-wrap: anywhere;
+}
+
+.history-encounters small {
+  margin-top: 3px;
+  color: #63706f;
+  font-size: 12px;
+}
+
+.history-encounters p {
+  margin: 6px 0 0;
+  color: #526160;
+  line-height: 1.4;
 }
 
 dt {

@@ -8,16 +8,29 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_CARE_COORDINATION_BASE_URL = "http://localhost:8084"
+DEFAULT_CARE_COORDINATION_TIMEOUT_SECONDS = 0.5
 
 
 class CareCoordinationTool:
     name = "care_coordination"
 
-    def __init__(self, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout_seconds: float | None = None,
+    ) -> None:
         self.base_url = (
             base_url
             or os.getenv("CARE_COORDINATION_BASE_URL", DEFAULT_CARE_COORDINATION_BASE_URL)
         ).rstrip("/")
+        self.timeout_seconds = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else _env_timeout(
+                "CARE_COORDINATION_TIMEOUT_SECONDS",
+                DEFAULT_CARE_COORDINATION_TIMEOUT_SECONDS,
+            )
+        )
 
     def run(
         self,
@@ -48,7 +61,7 @@ class CareCoordinationTool:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=3) as response:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
                 plan = json.loads(response.read().decode("utf-8"))
             return {
                 "tool": self.name,
@@ -81,3 +94,13 @@ class CareCoordinationTool:
                     "message": str(exc),
                 },
             }
+
+
+def _env_timeout(name: str, default: float) -> float:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        return float(raw_value)
+    except ValueError:
+        return default

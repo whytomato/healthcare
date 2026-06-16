@@ -43,8 +43,11 @@ def test_frontend_merges_live_progress_with_final_timeline_and_report_shapes() -
     assert "mergeTimelineEvents(progressEvents.value, finalTimeline.value)" in app
     assert "progressCompletedAgents" in app
     assert "extractFirstFinalReportText" in app
-    assert '"report_summary", "summary", "markdown", "content", "text"' in app
-    assert "markdown.render(finalReportText.value)" in app
+    assert '"markdown", "report_markdown", "content", "text", "report_summary", "summary"' in app
+    assert "normalizeReportMarkdownText(finalReportText.value" in app
+    assert "result?: WorkflowResult" not in app
+    assert "currentTask.value?.result" not in app
+    assert "clinicalRecord.value?.rawResult || null" in app
 
 
 def test_frontend_exposes_demo_cases_for_stable_manual_flow_demos() -> None:
@@ -79,7 +82,99 @@ def test_frontend_uses_workflow_display_panel_for_timeline_path_and_decisions() 
     assert "Agent Handoff Timeline" in panel
     assert "Executed Path" in panel
     assert "Workflow Decisions" in panel
-    assert "liveStages" in app
+
+
+def test_frontend_graph_view_uses_realtime_timeline_events_not_fixed_stages() -> None:
+    panel = Path("frontend/src/components/WorkflowDisplayPanel.vue").read_text(encoding="utf-8")
+    graph_path = Path("frontend/src/components/AgentWorkflowGraph.vue")
+    package_json = Path("frontend/package.json").read_text(encoding="utf-8")
+    styles = Path("frontend/src/styles.css").read_text(encoding="utf-8")
+
+    assert graph_path.is_file()
+    graph = graph_path.read_text(encoding="utf-8")
+
+    assert '"@vue-flow/core"' in package_json
+    assert '"@vue-flow/background"' in package_json
+    assert '"@vue-flow/controls"' in package_json
+    assert '"@vue-flow/minimap"' in package_json
+    assert "VueFlow" in graph
+    assert "Background" in graph
+    assert "Controls" in graph
+    assert "MiniMap" in graph
+    assert "@vue-flow/core/dist/style.css" in graph
+    assert "AgentWorkflowGraph" in panel
+    assert "activeWorkflowView" in panel
+    assert (
+        'activeWorkflowView === "timeline"' in panel
+        or "activeWorkflowView === 'timeline'" in panel
+    )
+    assert (
+        'activeWorkflowView === "graph"' in panel
+        or "activeWorkflowView === 'graph'" in panel
+    )
+    assert ':events="timeline"' in panel
+    assert "Hospital Agent Coverage Graph" in graph
+    assert "graphNodes" in graph
+    assert "graphEdges" in graph
+    assert "@node-click" in graph
+    assert "selectedSummary" in graph
+    assert "Decision labels" in graph
+    assert "Decision nodes" not in graph
+    assert "addDecisionNodes" not in graph
+    assert "choice" in graph
+    assert "status" in graph
+    assert "agent_completed" in graph
+    assert "decision_made" in graph
+    assert "tool_invoked" in graph
+    assert "tool_skipped" in graph
+    assert 'mode: "parallel"' in graph
+    assert "edge-mode-parallel" in styles
+    assert "selected_branch" in graph
+    assert "selected_branches" in graph
+    assert "collectEdgeDecisionLabels" in graph
+    assert "journeyStageDefinitions" not in graph
+
+
+def test_frontend_graph_distinguishes_selected_skipped_tool_and_parallel_paths() -> None:
+    graph = Path("frontend/src/components/AgentWorkflowGraph.vue").read_text(encoding="utf-8")
+    styles = Path("frontend/src/styles.css").read_text(encoding="utf-8")
+
+    assert "graph-legend" in graph
+    assert "Actual workflow" in graph
+    assert "Available but not taken" in graph
+    assert "Explicitly skipped" in graph
+    assert "Tool selected" in graph
+    assert "Tool skipped" in graph
+    assert "Tool unavailable" in graph
+    assert "Tool nodes" in graph
+    assert "Unused branches" in graph
+    assert "skippedBranchTargets" in graph
+    assert "skipped_branches" in graph
+    assert "edgeKind" in graph
+    assert "edge-selected" in graph
+    assert "edge-skipped" in graph
+    assert "edge-tool-selected" in graph
+    assert "edge-tool-skipped" in graph
+    assert "edge-tool-unavailable" in graph
+    assert "edge-mode-parallel" in styles
+    assert "graph-node-${status}" in graph
+    assert ".graph-legend" in styles
+    assert ".workflow-flow .edge-available" in styles
+    assert ".workflow-flow .edge-skipped" in styles
+    assert ".workflow-flow .edge-tool-unavailable" in styles
+    assert ".workflow-flow .graph-node-skipped" in styles
+
+
+def test_frontend_timeline_empty_state_does_not_show_legacy_live_flow() -> None:
+    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
+    panel = Path("frontend/src/components/WorkflowDisplayPanel.vue").read_text(encoding="utf-8")
+
+    assert "liveStages" not in app
+    assert "liveFlowTitle" not in app
+    assert "stage-list" not in panel
+    assert "stage-item" not in panel
+    assert "Patient Intake" not in panel
+    assert "timeline-empty-state" in panel
 
 
 def test_frontend_timeline_nodes_surface_event_meaning_for_manual_review() -> None:
@@ -106,14 +201,42 @@ def test_frontend_fetches_and_displays_patient_history_summary() -> None:
     assert "recentEncounters" in record_pane
     assert "allergies" in record_pane
     assert "currentMedications" in record_pane
+    assert "history-encounters" in record_pane
+    assert "recentEncounters.length" in record_pane
+    assert "formatTime(encounter.updatedAt)" in record_pane
+    assert "historyListText(encounter.selectedSpecialties)" in record_pane
 
 
 def test_frontend_record_pane_renders_markdown_report_and_record_json() -> None:
     app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
     record_pane = Path("frontend/src/components/ClinicalRecordPane.vue").read_text(encoding="utf-8")
 
-    assert "markdown.render(finalReportText.value)" in app
+    assert 'import { normalizeReportMarkdownText } from "./reportFormatting"' in app
+    assert "normalizeReportMarkdownText(finalReportText.value" in app
+    assert "const markdownPreferredKeys = [\"markdown\", \"report_markdown\", \"content\", \"text\", \"report_summary\", \"summary\"]" in app
+    assert "const data = value.data" in app
+    assert "extractFinalReportText(data)" in app
     assert "Final Report" in record_pane
     assert "v-html=\"finalReportHtml\"" in record_pane
     assert "Record JSON" in record_pane
     assert "compactRecordJson" in record_pane
+
+
+def test_frontend_history_report_excerpts_render_markdown_not_plain_text() -> None:
+    record_pane = Path("frontend/src/components/ClinicalRecordPane.vue").read_text(encoding="utf-8")
+    formatter = Path("frontend/src/reportFormatting.ts").read_text(encoding="utf-8")
+
+    assert 'import MarkdownIt from "markdown-it"' in record_pane
+    assert 'import { renderReportMarkdown } from "../reportFormatting"' in record_pane
+    assert "historyReportExcerptHtml" in record_pane
+    assert "encounterReportExcerptHtml(encounter)" in record_pane
+    assert "renderReportMarkdown(markdown, value)" in record_pane
+    assert "normalizeReportMarkdownText" in formatter
+    assert "extractStructuredReportText" in formatter
+    assert "looksLikeJsonReport" in formatter
+    assert "unwrapJsonCodeFence" in formatter
+    assert 'opening === "```json"' in formatter
+    assert 'v-html="historyReportExcerptHtml"' in record_pane
+    assert 'v-html="encounterReportExcerptHtml(encounter)"' in record_pane
+    assert "{{ patientHistory.lastFinalReports[0]" not in record_pane
+    assert "{{ encounter.reportExcerpt }}" not in record_pane

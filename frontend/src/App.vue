@@ -148,8 +148,6 @@
         :timeline-caption="timelineCaption"
         :workflow-name="workflowName"
         :selected-task-id="selectedTaskId"
-        :live-flow-title="liveFlowTitle"
-        :live-stages="liveStages"
         :executed-path="executedPath"
         :displayed-decisions="displayedDecisions"
       />
@@ -173,6 +171,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import ClinicalRecordPane from "./components/ClinicalRecordPane.vue";
 import HospitalJourneyOverview from "./components/HospitalJourneyOverview.vue";
 import WorkflowDisplayPanel from "./components/WorkflowDisplayPanel.vue";
+import { normalizeReportMarkdownText } from "./reportFormatting";
 import {
   CircleDot,
   ClipboardList,
@@ -195,7 +194,6 @@ type AiTask = {
   doctorId?: string;
   patientId?: string;
   language?: string;
-  result?: WorkflowResult;
   errorMessage?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -284,6 +282,7 @@ type WorkflowProgressEvent = {
 };
 
 type DemoCase = {
+  id: string;
   name: string;
   preview: string;
   patientId: string;
@@ -299,74 +298,6 @@ const markdown = new MarkdownIt({
   linkify: true,
   typographer: true
 });
-
-const hospitalStages = [
-  {
-    agent: "registration_agent",
-    label: "Registration",
-    description: "患者建档、复诊识别和行政信息检查"
-  },
-  {
-    agent: "intake_agent",
-    label: "Patient Intake",
-    description: "采集主诉和患者上下文"
-  },
-  {
-    agent: "nurse_vitals_agent",
-    label: "Nurse Vitals",
-    description: "采集生命体征并识别异常信号"
-  },
-  {
-    agent: "appointment_agent",
-    label: "Appointment Classification",
-    description: "判断门诊或急诊优先级"
-  },
-  {
-    agent: "triage_nurse_agent",
-    label: "Triage Nurse",
-    description: "识别紧急程度和红色警示"
-  },
-  {
-    agent: "department_router_agent",
-    label: "Department Routing",
-    description: "选择急诊、全科或专科候选科室"
-  },
-  {
-    agent: "specialist_router_agent",
-    label: "Specialist Routing",
-    description: "选择需要并发会诊的专科"
-  },
-  {
-    agent: "parallel_specialists",
-    label: "Parallel Consultation",
-    description: "多专科并发生成会诊意见"
-  },
-  {
-    agent: "diagnostic_order_agent",
-    label: "Diagnostic Orders",
-    description: "生成检验、影像和床旁评估医嘱"
-  },
-  {
-    agent: "lab_imaging",
-    label: "Lab and Imaging Interpretation",
-    description: "解释检验和影像路径，形成下游风险提示"
-  },
-  {
-    agent: "medication_plan_agent",
-    label: "Medication Planning",
-    description: "药房安全复核后形成 demo 级用药计划"
-  },
-  {
-    agent: "admission_coordinator_agent",
-    label: "Admission Coordination",
-    description: "判断门诊随访、急诊留观或住院评估路径"
-  },
-  {
-    agent: "final_hospital_report_agent",
-    label: "Final Report",
-    description: "汇总最终医院工作流程报告"
-  }
-] as const;
 
 const journeyStageDefinitions = [
   {
@@ -435,14 +366,16 @@ const form = reactive({
 
 const demoCases: DemoCase[] = [
   {
+    id: "emergency_multi_specialty",
     name: "急诊多专科",
-    preview: "胸痛、发热、意识混乱，触发急诊和多专科会诊",
+    preview: "胸痛、发热、呼吸困难和意识模糊，触发急诊和多专科会诊",
     patientId: "p-emergency-001",
     doctorId: "d-er-001",
     language: "zh-CN",
     caseText: "A 67-year-old male has fever, productive cough, chest discomfort, shortness of breath and confusion. He looks acutely ill and the family reports worsening symptoms over the last 12 hours."
   },
   {
+    id: "standard_outpatient",
     name: "普通门诊",
     preview: "咳嗽、发热、无明显红旗，触发门诊路径",
     patientId: "p-outpatient-001",
@@ -451,12 +384,31 @@ const demoCases: DemoCase[] = [
     caseText: "A 34-year-old female has cough, low-grade fever, sore throat and fatigue for three days. She is alert, able to drink fluids, and reports no chest pain, confusion or severe shortness of breath."
   },
   {
+    id: "low_risk_followup",
     name: "低风险随访",
     preview: "复诊咨询和轻症症状，突出随访/处置流程",
     patientId: "p-followup-001",
     doctorId: "d-followup-001",
     language: "zh-CN",
     caseText: "A 45-year-old male requests follow-up after a recent outpatient visit for mild seasonal allergies. Symptoms are improving with mild nasal congestion and no fever, chest pain, dyspnea or neurologic symptoms."
+  },
+  {
+    id: "human_review",
+    name: "人工审核",
+    preview: "高风险红旗和多系统症状，展示 human review tool 被 agent 主动选择",
+    patientId: "p-review-001",
+    doctorId: "d-review-001",
+    language: "zh-CN",
+    caseText: "A 72-year-old patient reports chest pain, shortness of breath, high fever and confusion after recent medication changes. The family is unsure about allergies and asks whether admission is needed."
+  },
+  {
+    id: "service_fallback",
+    name: "服务降级",
+    preview: "关闭病历或后续安排服务时，展示 tool unavailable fallback",
+    patientId: "p-fallback-001",
+    doctorId: "d-fallback-001",
+    language: "zh-CN",
+    caseText: "A 52-year-old patient has cough and fever with prior outpatient records expected, but external history or care coordination service may be unavailable during this demo."
   }
 ];
 
@@ -476,7 +428,7 @@ const serviceStatus = reactive({
 let pollGeneration = 0;
 
 const workflowResult = computed<WorkflowResult | null>(() => {
-  return currentTask.value?.result || clinicalRecord.value?.rawResult || null;
+  return clinicalRecord.value?.rawResult || null;
 });
 
 const finalTimeline = computed<TimelineEvent[]>(() => {
@@ -613,42 +565,6 @@ const workflowStats = computed(() => {
   };
 });
 
-const liveFlowTitle = computed(() => {
-  if (!currentTask.value) return "等待后端任务状态";
-  if (currentTask.value.status === "PUBLISHED") return "AI worker 正在执行医院多 Agent workflow";
-  if (currentTask.value.status === "RECEIVED") return "Patient Encounter 已创建，等待发布到 Kafka";
-  if (currentTask.value.status === "FAILED") return "Workflow 执行失败";
-  if (currentTask.value.status === "NEEDS_DATA") return "Workflow 需要补充信息";
-  return "正在同步 workflow record";
-});
-
-const liveStages = computed(() => {
-  const completed = new Set(executedPath.value);
-  const hasCompletedPath = completed.size > 0;
-  const activeIndex = currentTask.value?.status === "RECEIVED" ? 0 : 3;
-
-  return hospitalStages.map((stage, index) => {
-    const stageAgents = stage.agent === "parallel_specialists"
-      ? ["respiratory_specialist_agent", "cardiology_specialist_agent", "infectious_disease_specialist_agent", "neurology_specialist_agent"]
-      : stage.agent === "lab_imaging"
-        ? ["lab_result_interpreter_agent", "imaging_interpreter_agent"]
-        : [stage.agent];
-    const isDone = stageAgents.some((agent) => completed.has(agent));
-    return {
-      ...stage,
-      state: hasCompletedPath
-        ? isDone
-          ? "done"
-          : "waiting"
-        : index < activeIndex
-          ? "done"
-          : index === activeIndex
-            ? "active"
-            : "waiting"
-    };
-  });
-});
-
 const finalReportText = computed(() => {
   const result = workflowResult.value;
   return extractFirstFinalReportText([
@@ -659,7 +575,7 @@ const finalReportText = computed(() => {
   ]);
 });
 
-const finalReportHtml = computed(() => markdown.render(finalReportText.value));
+const finalReportHtml = computed(() => markdown.render(normalizeReportMarkdownText(finalReportText.value, "")));
 
 const dispositionText = computed(() => {
   const disposition = workflowResult.value?.disposition;
@@ -918,18 +834,17 @@ function extractFinalReportText(report: unknown): string {
     return "";
   }
   const value = report as Record<string, unknown>;
-  for (const key of ["summary", "report_summary", "markdown", "content", "text"]) {
-    if (typeof value[key] === "string") {
-      return value[key] as string;
-    }
-  }
   const data = value.data;
   if (data && typeof data === "object") {
-    const dataValue = data as Record<string, unknown>;
-    for (const key of ["report_summary", "summary", "markdown", "content", "text"]) {
-      if (typeof dataValue[key] === "string") {
-        return dataValue[key] as string;
-      }
+    const text = extractFinalReportText(data);
+    if (text.trim()) {
+      return text;
+    }
+  }
+  const markdownPreferredKeys = ["markdown", "report_markdown", "content", "text", "report_summary", "summary"];
+  for (const key of markdownPreferredKeys) {
+    if (typeof value[key] === "string") {
+      return value[key] as string;
     }
   }
   if (Array.isArray(value.findings) && typeof value.findings[0] === "string") {

@@ -6,8 +6,10 @@ import sys
 import time
 from pathlib import Path
 
+import app.tools.care_coordination as care_coordination_module
+import app.tools.patient_history_lookup as patient_history_module
 from app.llm_client import LlmResult
-from app.tools import AIConsultationTool
+from app.tools import AIConsultationTool, ClinicalToolRegistry
 from app.workflows.planner import HospitalWorkflowPlanner
 from app.workflows.hospital import HospitalOrchestrator
 
@@ -22,6 +24,23 @@ class FakeHospitalLlmClient:
         return LlmResult(
             status="ready",
             content=f"LLM generated hospital output for {role}.",
+        )
+
+
+class JsonHospitalLlmClient(FakeHospitalLlmClient):
+    def chat(self, messages: list[dict[str, str]]) -> LlmResult:
+        self.calls.append(messages)
+        return LlmResult(
+            status="ready",
+            content=json.dumps(
+                {
+                    "summary": "Structured role summary.",
+                    "findings": ["Structured finding."],
+                    "recommendations": ["Structured recommendation."],
+                    "handoff_reason": "Structured handoff reason.",
+                    "confidence": 0.86,
+                }
+            ),
         )
 
 
@@ -63,6 +82,45 @@ class FakePatientHistoryLookupTool:
                 "lastFinalReports": ["Prior respiratory follow-up completed."],
             },
         }
+
+
+class FakeCareCoordinationTool:
+    name = "care_coordination"
+
+    def run(
+        self,
+        task_id: str,
+        patient_id: str | None,
+        doctor_id: str | None,
+        disposition: str,
+        triage_urgency: str,
+        selected_specialties: list[str],
+        monitoring_plan: list[str],
+    ) -> dict:
+        return {
+            "tool": self.name,
+            "status": "ready",
+            "summary": "Mock care coordination plan returned.",
+            "payload": {
+                "taskId": task_id,
+                "patientId": patient_id,
+                "doctorId": doctor_id,
+                "status": "ready",
+                "disposition": disposition,
+                "triageUrgency": triage_urgency,
+                "selectedSpecialties": selected_specialties,
+                "followUpActions": monitoring_plan,
+                "referralActions": [],
+                "admissionActions": [],
+                "humanReviewRequired": triage_urgency == "high",
+            },
+        }
+
+
+class FastClinicalToolRegistry(ClinicalToolRegistry):
+    def __init__(self) -> None:
+        super().__init__()
+        self.care_coordination = FakeCareCoordinationTool()
 
 
 class SlowFakeHospitalLlmClient(FakeHospitalLlmClient):
@@ -126,6 +184,23 @@ def test_hospital_orchestrator_runs_complete_agent_hospital_workflow() -> None:
     )
     assert result["ai_consultation"]["workflow"] == "ai_consultation_tool"
     assert result["final_report"]["summary"]
+
+
+def test_final_hospital_report_agent_returns_markdown_for_frontend_rendering() -> None:
+    result = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="A 67-year-old male has fever, productive cough, chest discomfort and confusion.",
+        patient_id="p001",
+        doctor_id="d001",
+    )
+
+    markdown = result["final_report"]["data"]["markdown"]
+
+    assert markdown.startswith("## Final Hospital Report")
+    assert "- **Selected specialties:**" in markdown
+    assert "- **Disposition:**" in markdown
 
 
 def test_hospital_orchestrator_uses_agent_handoffs_as_real_scheduling_input() -> None:
@@ -397,6 +472,10 @@ def test_patient_history_lookup_is_rendered_as_agent_tool_use_not_prefetch() -> 
     assert tool_events[0]["decision_scope"] == "tool_use"
     assert tool_events[0]["payload"]["tool"] == "patient_history_lookup"
     assert tool_events[0]["payload"]["status"] == "ready"
+    assert tool_events[0]["reason"] == "identify whether this is a new or returning patient"
+    assert tool_events[0]["payload"]["choice"] == "selected"
+    assert tool_events[0]["payload"]["selection_reason"] == tool_events[0]["reason"]
+    assert "{'patientId'" not in tool_events[0]["reason"]
 
 
 def test_patient_history_lookup_tool_informs_pharmacy_and_final_report_not_triage() -> None:
@@ -567,6 +646,102 @@ def test_hospital_orchestrator_uses_llm_for_reasoning_roles_when_client_is_avail
     assert len(client.calls) >= 7
 
 
+def test_llm_capable_agents_request_and_expose_structured_role_outputs() -> None:
+    client = JsonHospitalLlmClient()
+
+    result = HospitalOrchestrator(
+        llm_client=client,
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="fever, productive cough, chest discomfort and confusion",
+        patient_id="p001",
+        doctor_id="d001",
+    )
+
+    emergency = next(
+        item for item in result["agent_results"] if item["agent"] == "emergency_physician_agent"
+    )
+    final_report = result["final_report"]
+
+    assert "Return only JSON" in client.calls[0][0]["content"]
+    assert '"summary"' in client.calls[0][0]["content"]
+    assert emergency["data"]["llm_structured"]["summary"] == "Structured role summary."
+    assert emergency["data"]["llm_structured"]["findings"] == ["Structured finding."]
+    assert final_report["data"]["llm_structured"]["recommendations"] == [
+        "Structured recommendation."
+    ]
+
+
+def test_llm_capable_agents_parse_fenced_json_structured_outputs() -> None:
+    class FencedJsonHospitalLlmClient:
+        def chat(self, messages):
+            return LlmResult(
+                status="ready",
+                content=(
+                    "```json\n"
+                    "{\n"
+                    '  "summary": "Readable clinical summary.",\n'
+                    '  "findings": ["Readable finding."],\n'
+                    '  "recommendations": ["Readable recommendation."],\n'
+                    '  "handoff_reason": "Readable handoff.",\n'
+                    '  "confidence": 0.91\n'
+                    "}\n"
+                    "```"
+                ),
+            )
+
+    result = HospitalOrchestrator(
+        llm_client=FencedJsonHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="A 45-year-old male requests low risk allergy follow-up.",
+        patient_id="p-fenced-json",
+        doctor_id="d001",
+    )
+
+    final_report = result["final_report"]
+
+    assert final_report["summary"] == "Readable clinical summary."
+    assert final_report["data"]["report_summary"] == "Readable clinical summary."
+    assert "```json" not in final_report["summary"]
+    assert "```json" not in final_report["data"]["markdown"]
+    assert final_report["data"]["llm_structured"]["findings"] == ["Readable finding."]
+
+
+def test_optional_external_tools_use_short_demo_timeouts(monkeypatch) -> None:
+    patient_history_timeouts: list[float] = []
+    care_coordination_timeouts: list[float] = []
+
+    def slow_patient_history_response(request, timeout):
+        patient_history_timeouts.append(timeout)
+        raise TimeoutError("history service did not answer in demo time")
+
+    def slow_care_coordination_response(request, timeout):
+        care_coordination_timeouts.append(timeout)
+        raise TimeoutError("care service did not answer in demo time")
+
+    monkeypatch.delenv("CLINICAL_RECORD_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("CARE_COORDINATION_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setattr(patient_history_module, "urlopen", slow_patient_history_response)
+    monkeypatch.setattr(care_coordination_module, "urlopen", slow_care_coordination_response)
+
+    history = patient_history_module.PatientHistoryLookupTool().run("p-timeout")
+    care = care_coordination_module.CareCoordinationTool().run(
+        task_id="t-timeout",
+        patient_id="p-timeout",
+        doctor_id="d001",
+        disposition="outpatient_follow_up",
+        triage_urgency="standard",
+        selected_specialties=["respiratory"],
+        monitoring_plan=["Review test results when available."],
+    )
+
+    assert history["status"] == "unavailable"
+    assert care["status"] == "unavailable"
+    assert patient_history_timeouts == [0.5]
+    assert care_coordination_timeouts == [0.5]
+
+
 def test_hospital_orchestrator_runs_selected_specialist_consultations_in_parallel() -> None:
     client = SlowFakeHospitalLlmClient(delay_seconds=0.2)
 
@@ -574,6 +749,8 @@ def test_hospital_orchestrator_runs_selected_specialist_consultations_in_paralle
     result = HospitalOrchestrator(
         llm_client=client,
         consultation_tool=FakeAIConsultationTool(),
+        patient_history_tool=FakePatientHistoryLookupTool(),
+        tool_registry=FastClinicalToolRegistry(),
     ).run(
         case_text="fever, productive cough, chest discomfort and confusion",
         patient_id="p001",
@@ -646,6 +823,144 @@ def test_hospital_orchestrator_returns_agent_handoff_timeline() -> None:
     assert fanin["payload"]["completed_agents"] == fanout["target_agents"]
 
 
+def test_timeline_explains_role_scoped_agent_decisions_and_tool_choices() -> None:
+    result = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="67-year-old male with fever, productive cough, chest pain, shortness of breath and confusion.",
+        patient_id="p001",
+        doctor_id="d001",
+    )
+
+    timeline = result["handoff_timeline"]
+    decisions = {
+        event["decision"]: event
+        for event in timeline
+        if event["event_type"] == "decision_made"
+    }
+    key_decisions = [
+        "emergency_branch",
+        "department_route_selected",
+        "specialist_consultation_branch",
+        "diagnostic_orders_created",
+        "medication_safety_review_required",
+        "emergency_reassessment",
+        "admission_pathway_selected",
+    ]
+
+    for decision_name in key_decisions:
+        payload = decisions[decision_name]["payload"]
+        assert payload["decision_type"] == "role_scoped_agent_decision"
+        assert payload["role"]
+        assert isinstance(payload["handoff_to"], list)
+        assert isinstance(payload["tool_choices"], list)
+        assert payload["evidence"]
+
+    assert decisions["emergency_branch"]["payload"]["handoff_to"] == [
+        "department_router_agent"
+    ]
+    assert decisions["department_route_selected"]["payload"]["handoff_to"] == [
+        "emergency_physician_agent"
+    ]
+    assert {
+        "respiratory_specialist_agent",
+        "cardiology_specialist_agent",
+        "infectious_disease_specialist_agent",
+        "neurology_specialist_agent",
+    }.issubset(
+        set(decisions["specialist_consultation_branch"]["payload"]["handoff_to"])
+    )
+
+    guideline_choice = next(
+        choice
+        for choice in decisions["emergency_branch"]["payload"]["tool_choices"]
+        if choice["tool"] == "guideline_lookup"
+    )
+    assert guideline_choice["choice"] == "selected"
+    assert guideline_choice["reason"]
+
+    tool_events = [
+        event
+        for event in timeline
+        if event["event_type"] in {"tool_invoked", "tool_skipped"}
+    ]
+    assert tool_events
+    for event in tool_events:
+        payload = event["payload"]
+        assert payload["decision_type"] == "role_scoped_agent_decision"
+        assert payload["role"]
+        assert payload["choice"] in {"selected", "skipped", "unavailable"}
+        assert payload["selection_reason"] == event["reason"]
+
+
+def test_demo_paths_expose_distinct_selected_and_skipped_branches() -> None:
+    outpatient = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="35-year-old patient with mild dry cough for two days.",
+        patient_id="p002",
+        doctor_id="d001",
+    )
+    emergency = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="67-year-old male with fever, productive cough, chest pain, shortness of breath and confusion.",
+        patient_id="p001",
+        doctor_id="d001",
+    )
+
+    outpatient_decisions = {
+        event["decision"]: event
+        for event in outpatient["handoff_timeline"]
+        if event["event_type"] == "decision_made"
+    }
+    emergency_decisions = {
+        event["decision"]: event
+        for event in emergency["handoff_timeline"]
+        if event["event_type"] == "decision_made"
+    }
+
+    assert "emergency_physician_agent" not in outpatient["executed_path"]
+    assert "emergency_physician_agent" in emergency["executed_path"]
+    assert outpatient_decisions["outpatient_branch"]["payload"]["selected_branch"] == {
+        "target": "department_router_agent",
+        "reason": "standard triage urgency",
+    }
+    assert outpatient_decisions["department_route_selected"]["payload"]["skipped_branches"] == [
+        {
+            "target": "emergency_physician_agent",
+            "reason": "standard urgency routes to general practitioner first",
+        }
+    ]
+    assert emergency_decisions["department_route_selected"]["payload"]["selected_branch"] == {
+        "target": "emergency_physician_agent",
+        "reason": "high triage urgency routes to emergency physician first",
+    }
+    assert emergency_decisions["specialist_consultation_branch"]["payload"]["parallel_branch"] is True
+    assert outpatient_decisions["specialist_consultation_branch"]["payload"]["parallel_branch"] is False
+
+    outpatient_tools = {
+        event["payload"]["tool"]: event["payload"]
+        for event in outpatient["handoff_timeline"]
+        if event["event_type"] in {"tool_invoked", "tool_skipped"}
+    }
+    emergency_tools = {
+        event["payload"]["tool"]: event["payload"]
+        for event in emergency["handoff_timeline"]
+        if event["event_type"] in {"tool_invoked", "tool_skipped"}
+    }
+
+    assert outpatient_tools["guideline_lookup"]["choice"] == "skipped"
+    assert outpatient_tools["human_review_request"]["choice"] == "skipped"
+    assert outpatient_tools["bed_availability"]["choice"] == "skipped"
+    assert emergency_tools["guideline_lookup"]["choice"] == "selected"
+    assert emergency_tools["human_review_request"]["choice"] == "selected"
+    assert emergency_tools["bed_availability"]["choice"] == "selected"
+
+
 def test_hospital_orchestrator_waits_for_lab_and_imaging_before_pharmacy_fanin() -> None:
     result = HospitalOrchestrator(
         llm_client=FakeHospitalLlmClient(),
@@ -713,11 +1028,21 @@ def test_agent_and_tool_packages_are_separate_public_boundaries() -> None:
     assert callable(AIConsultationTool)
     assert Path("app/agents").is_dir()
     assert Path("app/tools").is_dir()
+    assert Path("app/policies/clinical_policy.py").is_file()
     assert Path("app/tools/patient_history_lookup.py").is_file()
     assert not Path("app/agents/history.py").exists()
     assert Path("app/workflows").is_dir()
     assert not Path("app/hospital").exists()
     assert not Path("app/consultation").exists()
+
+
+def test_clinical_rules_live_in_policy_boundary_not_agent_package() -> None:
+    rules = Path("app/agents/rules.py").read_text(encoding="utf-8")
+
+    assert "config/clinical-policy.json" not in rules
+    assert "URGENT_TERMS = {" not in rules
+    assert "def _is_negated_clinical_mention" not in rules
+    assert "from app.policies.clinical_policy import" in rules
 
 
 def assert_path_contains_in_order(path: list[str], expected: list[str]) -> None:
