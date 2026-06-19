@@ -2,6 +2,14 @@
 
 本文档记录当前已经明确的下一步。当前目标是先完成一个可展示的 healthcare 多 agent + 微服务系统，再逐步增加业务复杂性和后续测试建模入口。
 
+## 后续重构约束
+
+- [ ] 将完整业务流程中的服务整理为边界清晰、职责单一、数据所有权明确、接口契约明确的微服务架构。
+- [ ] 后续允许调整 Agent Workflow，并允许现有 Agent 退出新流程，但不得删除任何已有 Agent 实现。
+- [ ] 本次微服务设计围绕以下六个服务展开：`patient-service`、`clinical-record-service`、`practitioner-service`、`resource-service`、`scheduling-service`、`emergency-encounter-service`。
+- [ ] `triage-service` 属于已有能力，本次不讨论其内部重新设计；后续只定义它与上述服务的集成契约。
+- [ ] 严格区分 Business Microservice 与 Agent Tool：微服务拥有权威业务状态和独立生命周期，Tool 只负责查询或命令服务及本地能力。
+
 ## 明日实现：多 agent 医院系统增强
 
 ### P0：前端展示 bug

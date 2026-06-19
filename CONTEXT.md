@@ -92,6 +92,14 @@ _Avoid_: Treating longitudinal history as a preloaded static prompt, treating hi
 A business capability boundary such as patient intake, appointment, encounter, consultation, lab advice, medication review, report, or follow-up. The first implementation may keep these boundaries in one backend process while preserving separable responsibilities.
 _Avoid_: Assuming every boundary must be a separate deployed service in the first demo
 
+**Business Microservice**:
+An independently owned business capability that maintains authoritative domain state and exposes explicit contracts for other parts of the emergency-care system.
+_Avoid_: Agent tool, workflow step, one service per agent
+
+**Agent Tool**:
+A callable interface used by a role agent to query or command a business microservice or local capability without owning the underlying business data or lifecycle.
+_Avoid_: Business microservice, authoritative data owner, one tool per deployed service
+
 **LLM-Capable Role Agent**:
 A hospital role agent that can call the configured LLM for reasoning or synthesis and can fall back to deterministic demo output when using mock mode.
 _Avoid_: Always-live LLM dependency, untestable agent
