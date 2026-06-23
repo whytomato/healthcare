@@ -59,10 +59,9 @@ class HospitalWorkflowPlanner:
         plan.extend(f"{specialty}_specialist_agent" for specialty in selected)
         plan.extend(
             [
-                "diagnostic_order_agent",
-                "lab_advisor_agent",
                 "lab_result_interpreter_agent",
                 "imaging_interpreter_agent",
+                "ordering_clinician_review_agent",
                 "pharmacy_safety_agent",
                 "medication_plan_agent",
             ]

@@ -6,6 +6,7 @@
 
 - [业务流程说明](docs/BUSINESS_FLOW.md)
 - [组会讲解稿](docs/MEETING_GUIDE.md)
+- [Current demo guide](docs/CURRENT_DEMO_GUIDE.md)
 - [项目领域词汇](CONTEXT.md)
 - [Agent 上下文说明](docs/agents/domain.md)
 
@@ -64,17 +65,20 @@ flowchart TD
     AIConsultTool --> RagTool[RagMcpClient<br/>knowledge retrieval]
     AIConsultTool --> LlmTool[LlmClient<br/>consultation synthesis]
 
-    Respiratory --> Lab[LabAdvisorAgent]
-    Cardiology --> Lab
-    Infection --> Lab
-    Neurology --> Lab
-    GP --> Lab
-    Lab --> Orders[DiagnosticOrderAgent]
-    Orders --> LabInterpret[LabResultInterpreterAgent]
-    Orders --> Imaging[ImagingInterpreterAgent]
+    Emergency --> LabInterpret[LabResultInterpreterAgent]
+    Emergency --> Imaging[ImagingInterpreterAgent]
+    Respiratory --> LabInterpret
+    Respiratory --> Imaging
+    Cardiology --> LabInterpret
+    Cardiology --> Imaging
+    Infection --> LabInterpret
+    Infection --> Imaging
+    Neurology --> LabInterpret
+    Neurology --> Imaging
 
-    LabInterpret --> Pharmacy[PharmacySafetyAgent]
-    Imaging --> Pharmacy
+    LabInterpret --> Review[OrderingClinicianReviewAgent]
+    Imaging --> Review
+    Review --> Pharmacy[PharmacySafetyAgent]
     Pharmacy --> Medication[MedicationPlanAgent]
     Medication -->|outpatient branch| Care[CarePlanAgent<br/>LLM-capable]
     Care --> Follow[FollowUpAgent]
@@ -89,7 +93,7 @@ Specialist agents selected by `SpecialistRouterAgent` run as parallel consultati
 
 Workflow output includes `handoff_timeline` as the main display contract for the multi-agent workflow. It records administrative, triage, routing, order, clinical interpretation, medication, disposition, admission, handoff, specialist parallel fan-out, fan-in, `tool_invoked`, and `tool_skipped` events so the UI can render the workflow without reverse-engineering raw agent results.
 
-Internal tools are grouped behind `ClinicalToolRegistry` so role agents can choose whether to use them during their own decisions. Current demo tools include `PatientHistoryLookupTool`, `GuidelineLookupTool`, `LabOrderTool`, `LabResultFetchTool`, `ImagingOrderTool`, `ImagingResultFetchTool`, `MedicationInteractionTool`, `BedAvailabilityTool`, `ReferralSchedulingTool`, `FollowUpSchedulingTool`, `HumanReviewRequestTool`, and `CareCoordinationTool`. Tool outcomes are emitted into the handoff timeline as `tool_invoked` or `tool_skipped`, and service failures such as an unavailable care-coordination service are represented as unavailable tool results instead of crashing the workflow.
+Internal tools are grouped behind `ClinicalToolRegistry` so role agents can choose whether to use them during their own decisions. Current demo tools include `PatientHistoryLookupTool`, `GuidelineLookupTool`, `LabResultFetchTool`, `ImagingResultFetchTool`, `MedicationInteractionTool`, `BedAvailabilityTool`, `ReferralSchedulingTool`, `FollowUpSchedulingTool`, `HumanReviewRequestTool`, `CareCoordinationTool`, `EmergencyEncounterTool`, `PractitionerAssignmentTool`, `ResourceReservationTool`, and `ExamSchedulingTool`. Tool outcomes are emitted into the handoff timeline as `tool_invoked` or `tool_skipped`, and service failures such as an unavailable care-coordination service are represented as unavailable tool results instead of crashing the workflow. `LabAdvisorAgent` and `DiagnosticOrderAgent` remain in the codebase for earlier/alternate hospital-lite experiments, but the current default path pauses them and uses the ordering-clinician review loop instead.
 
 `AdmissionCoordinatorAgent` can call `CareCoordinationTool`, which posts to `care-coordination-service` and records the resulting follow-up, referral, admission, and human-review plan in the agent timeline.
 
@@ -146,7 +150,27 @@ user / password
 python -B -m app.worker.kafka_worker --bootstrap-servers 127.0.0.1:9092
 ```
 
+For ER surge demos, start the worker with concurrent task processing so multiple patient encounters can compete for practitioner and resource capacity at the same time:
+
+```powershell
+python -B -m app.worker.kafka_worker `
+  --bootstrap-servers 127.0.0.1:9092 `
+  --concurrency 4
+```
+
 在 IDEA 中分别启动这些 Spring Boot Application，或使用 Maven 命令启动：
+
+批量启动/停止 Spring Boot 服务：
+
+```powershell
+.\scripts\start-healthcare-services.ps1
+.\scripts\start-healthcare-services.ps1 -CoreOnly
+.\scripts\start-healthcare-services.ps1 -Verify
+.\scripts\verify-healthcare-services.ps1 -CoreOnly
+.\scripts\stop-healthcare-services.ps1
+```
+
+`start-healthcare-services.ps1` 会把服务日志写入 `outputs\service-logs`，并把进程信息写入 `outputs\healthcare-services.pids.json`。默认启动核心服务和 ER 演示服务；`-CoreOnly` 只启动 `encounter-service`、`triage-service`、`clinical-record-service`、`care-coordination-service`；`-Verify` 会在启动后调用 `scripts\verify-healthcare-services.ps1`，并自动传递同一个 `-CoreOnly` 模式。
 
 启动 encounter-service：
 
@@ -250,9 +274,51 @@ GET  http://localhost:8084/health
 
 `POST /api/care/coordination-plans` accepts task, patient, disposition, triage urgency, selected specialties, and monitoring plan fields. It returns `followUpActions`, `referralActions`, `admissionActions`, and `humanReviewRequired` so later workflows can move disposition work out of the Python agent layer.
 
+Emergency Room microservices:
+
+```text
+POST http://localhost:8088/api/emergency/encounters
+POST http://localhost:8088/api/emergency/encounters/readiness
+GET  http://localhost:8088/health
+
+POST http://localhost:8085/api/practitioners/emergency-assignments
+GET  http://localhost:8085/health
+
+POST http://localhost:8086/api/resources/emergency-reservations
+GET  http://localhost:8086/health
+
+POST http://localhost:8087/api/schedules/emergency-exams
+GET  http://localhost:8087/health
+```
+
+The Emergency Room minimal demonstrator front-loads microservice use in high-urgency workflows. `EmergencyPhysicianAgent` opens an emergency encounter, requests practitioner assignment, reserves constrained emergency resources, writes readiness back to the emergency encounter, and creates stat exam scheduling before downstream review. Specialist agents can also schedule specialty-specific exams; exam results are expected to return to the ordering clinician for review. `LabAdvisorAgent` and `DiagnosticOrderAgent` remain available for the broader hospital-lite workflow but are not the only model for the new emergency-room loop.
+
+`practitioner-service` and `resource-service` now use Postgres-backed demo scheduling state. `practitioner-service` persists on-shift practitioners, specialties, active assignment counts, and `practitioner_assignments`. `resource-service` persists emergency resource inventory and `resource_reservations`. Both services use transactional reservation logic and expose release endpoints for repeated manual surge demos:
+
+```text
+POST http://localhost:8085/api/practitioners/emergency-assignments/{taskId}/release
+POST http://localhost:8086/api/resources/emergency-reservations/{taskId}/release
+```
+
+Ordering clinician review loop:
+
+```text
+EmergencyPhysicianAgent / SpecialistAgent
+  -> ExamSchedulingTool
+  -> LabResultInterpreterAgent + ImagingInterpreterAgent
+  -> OrderingClinicianReviewAgent
+  -> PharmacySafetyAgent
+```
+
+This matches the demo intent of initial assessment -> exams -> clinician review of results before medication and disposition. It keeps the old lab-advisor and diagnostic-order agents as reusable code but removes them from the current default workflow path.
+
+Emergency surge frontend demo:
+
+The Vue workbench includes an `Emergency Surge Scenario` panel. It submits several real `/api/ai/symptom-query` requests concurrently using the ER demo case, then polls each created task and reads the final clinical record for `resource_reservation` readiness and `practitioner_assignment` staffing. When `resource-service` or `practitioner-service` capacity is exhausted, completed tasks can show `ready`, `partial`, `unavailable`, `assigned`, or `partial` states in the surge panel and in the workflow graph tool nodes. Use `--concurrency 4` on the Python worker when testing ER surge so queued Kafka tasks are processed concurrently instead of one at a time.
+
 ## Vue 前端工作台
 
-前端使用 Vite dev proxy 转发请求，不需要额外配置 Spring CORS。请先启动 Kafka/Postgres、四个 Spring Boot 服务和 Python worker。
+前端使用 Vite dev proxy 转发请求，不需要额外配置 Spring CORS。请先启动 Kafka/Postgres、需要演示的 Spring Boot 服务和 Python worker；完整 ER 演示会额外用到 emergency-encounter、practitioner、resource、scheduling 四个服务。
 
 ```powershell
 cd frontend

@@ -45,6 +45,10 @@ def test_backend_is_parent_maven_project_with_healthcare_service_modules() -> No
         "triage-service",
         "clinical-record-service",
         "care-coordination-service",
+        "emergency-encounter-service",
+        "practitioner-service",
+        "resource-service",
+        "scheduling-service",
     ]
     for module in modules:
         assert (backend / module / "pom.xml").is_file()

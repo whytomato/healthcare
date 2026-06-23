@@ -1,101 +1,22 @@
 <template>
   <main class="app-shell">
-    <aside class="sidebar">
-      <section class="brand">
-        <div class="brand-mark">
-          <Hospital :size="26" />
-        </div>
-        <div>
-          <h1>Healthcare Workbench</h1>
-          <p>门诊就诊 · 多 Agent 流程演示</p>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-title">
-          <FilePlus2 :size="18" />
-          <h2>创建 Patient Encounter</h2>
-        </div>
-
-        <label class="field">
-          <span>Patient ID</span>
-          <input v-model="form.patientId" autocomplete="off" />
-        </label>
-
-        <label class="field">
-          <span>Doctor ID</span>
-          <input v-model="form.doctorId" autocomplete="off" />
-        </label>
-
-        <label class="field">
-          <span>Language</span>
-          <select v-model="form.language">
-            <option value="zh-CN">zh-CN</option>
-            <option value="en-US">en-US</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Chief Complaint</span>
-          <textarea v-model="form.caseText" rows="7" />
-        </label>
-
-        <div class="button-row">
-          <button class="primary-button" :disabled="isCreating || !form.caseText.trim()" @click="createEncounter">
-            <Loader2 v-if="isCreating" class="spin" :size="18" />
-            <Send v-else :size="18" />
-            <span>{{ isCreating ? "提交中" : "提交就诊" }}</span>
-          </button>
-          <button class="ghost-button" @click="refreshTasks">
-            <RefreshCw :size="18" />
-          </button>
-        </div>
-      </section>
-
-      <section class="panel compact">
-        <div class="panel-title">
-          <ClipboardList :size="18" />
-          <h2>Demo Cases</h2>
-        </div>
-        <div class="demo-case-list">
-          <button
-            v-for="demoCase in demoCases"
-            :key="demoCase.name"
-            class="demo-case"
-            @click="applyDemoCase(demoCase)"
-          >
-            <span class="demo-case-name">{{ demoCase.name }}</span>
-            <span class="demo-case-text">{{ demoCase.preview }}</span>
-          </button>
-        </div>
-      </section>
-
-      <section class="panel compact">
-        <div class="panel-title">
-          <ListChecks :size="18" />
-          <h2>Recent Tasks</h2>
-        </div>
-        <div class="task-list">
-          <button
-            v-for="task in tasks"
-            :key="task.taskId"
-            class="task-item"
-            :class="{ active: task.taskId === selectedTaskId }"
-            @click="selectTask(task.taskId)"
-          >
-            <span class="task-main">{{ task.patientId || "unknown patient" }}</span>
-            <span class="task-sub">{{ shortId(task.taskId) }} · {{ task.status }}</span>
-          </button>
-          <p v-if="tasks.length === 0" class="muted">暂无任务</p>
-        </div>
-      </section>
-    </aside>
+    <EncounterSidebar
+      :form="form"
+      :demo-cases="demoCases"
+      :tasks="tasks"
+      :selected-task-id="selectedTaskId"
+      :is-creating="isCreating"
+      @create-encounter="createEncounter"
+      @refresh-tasks="refreshTasks"
+      @apply-demo-case="applyDemoCase"
+      @select-task="selectTask"
+    />
 
     <section class="workspace">
       <header class="topbar">
         <div>
           <p class="eyebrow">Current Encounter</p>
-          <h2>{{ selectedTaskId ? shortId(selectedTaskId) : "等待创建或选择任务" }}</h2>
+          <h2>{{ selectedTaskId ? shortId(selectedTaskId) : "Waiting for an encounter" }}</h2>
         </div>
         <div class="topbar-actions">
           <span class="service-pill" :class="serviceStatus.encounter ? 'ok' : 'warn'">
@@ -116,6 +37,14 @@
         <TriangleAlert :size="18" />
         <span>{{ errorMessage }}</span>
       </section>
+
+      <EmergencySurgePanel
+        v-model:count="surgeCount"
+        :is-running="isSurgeRunning"
+        :results="surgeResults"
+        @run-surge="runEmergencySurge"
+        @select-task="selectTask"
+      />
 
       <section class="metrics-grid">
         <article class="metric">
@@ -169,127 +98,30 @@
 import MarkdownIt from "markdown-it";
 import { computed, onMounted, reactive, ref } from "vue";
 import ClinicalRecordPane from "./components/ClinicalRecordPane.vue";
+import EmergencySurgePanel from "./components/EmergencySurgePanel.vue";
+import EncounterSidebar from "./components/EncounterSidebar.vue";
 import HospitalJourneyOverview from "./components/HospitalJourneyOverview.vue";
 import WorkflowDisplayPanel from "./components/WorkflowDisplayPanel.vue";
+import { demoCases, emergencySurgeTemplate } from "./demoCases";
 import { normalizeReportMarkdownText } from "./reportFormatting";
 import {
-  CircleDot,
-  ClipboardList,
-  FilePlus2,
-  Hospital,
-  ListChecks,
-  Loader2,
-  RefreshCw,
-  Send,
-  TriangleAlert
-} from "lucide-vue-next";
-
-type TaskStatus = "RECEIVED" | "PUBLISHED" | "COMPLETED" | "NEEDS_DATA" | "FAILED";
-
-type AiTask = {
-  taskId: string;
-  status: TaskStatus;
-  caseText: string;
-  question?: string;
-  doctorId?: string;
-  patientId?: string;
-  language?: string;
-  errorMessage?: string;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-type TimelineEvent = {
-  event_type?: string;
-  agent?: string;
-  target_agents?: string[];
-  decision?: string;
-  decision_scope?: string;
-  reason?: string;
-  payload?: Record<string, unknown>;
-  duration_ms?: number;
-  event_index?: number;
-};
-
-type WorkflowDecision = {
-  decision?: string;
-  made_by?: string;
-  agent?: string;
-  reason?: string;
-};
-
-type WorkflowResult = {
-  workflow?: string;
-  executed_path?: string[];
-  workflow_decisions?: WorkflowDecision[];
-  selected_specialties?: string[];
-  disposition?: unknown;
-  care_pathway?: unknown;
-  ai_consultation?: unknown;
-  final_report?: Record<string, unknown>;
-  handoff_timeline?: TimelineEvent[];
-  agent_results?: Record<string, unknown>[];
-};
-
-type ClinicalRecord = {
-  taskId: string;
-  status: string;
-  executedPath?: string[];
-  workflowDecisions?: WorkflowDecision[];
-  handoffTimeline?: TimelineEvent[];
-  selectedSpecialties?: string[];
-  carePathway?: unknown;
-  aiConsultation?: unknown;
-  finalReport?: Record<string, unknown>;
-  rawResult?: WorkflowResult;
-  errorMessage?: string;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-type PatientHistoryEncounter = {
-  taskId: string;
-  status: string;
-  updatedAt?: string;
-  selectedSpecialties?: string[];
-  disposition?: string;
-  reportExcerpt?: string;
-};
-
-type PatientHistorySummary = {
-  patientId: string;
-  recentEncounters: PatientHistoryEncounter[];
-  knownConditions: string[];
-  allergies: string[];
-  currentMedications: string[];
-  previousDispositions: string[];
-  lastFinalReports: string[];
-};
-
-type WorkflowProgressEvent = {
-  taskId: string;
-  eventType: string;
-  agent?: string;
-  decision?: string;
-  decisionScope?: string;
-  reason?: string;
-  targetAgents?: string[];
-  parallelGroup?: string;
-  payload?: Record<string, unknown>;
-  durationMs?: number;
-  eventIndex: number;
-  createdAt?: string;
-};
-
-type DemoCase = {
-  id: string;
-  name: string;
-  preview: string;
-  patientId: string;
-  doctorId: string;
-  language: string;
-  caseText: string;
-};
+  extractSurgePractitionerAssignment,
+  extractSurgeReadiness
+} from "./surgeExtractors";
+import type {
+  AiTask,
+  ClinicalRecord,
+  DemoCase,
+  EncounterForm,
+  PatientHistorySummary,
+  SurgeResult,
+  TaskStatus,
+  TimelineEvent,
+  WorkflowDecision,
+  WorkflowProgressEvent,
+  WorkflowResult
+} from "./types";
+import { CircleDot, RefreshCw, TriangleAlert } from "lucide-vue-next";
 
 const terminalStatuses = new Set<TaskStatus>(["COMPLETED", "FAILED", "NEEDS_DATA"]);
 const markdown = new MarkdownIt({
@@ -303,25 +135,25 @@ const journeyStageDefinitions = [
   {
     key: "registration",
     label: "Registration",
-    detail: "建档与基本信息",
+    detail: "Registration, history lookup, intake, and vital signs.",
     agents: ["registration_agent", "intake_agent", "nurse_vitals_agent"]
   },
   {
     key: "triage",
     label: "Triage",
-    detail: "门诊/急诊优先级",
+    detail: "Appointment priority, red-flag recognition, and urgency classification.",
     agents: ["appointment_agent", "triage_nurse_agent"]
   },
   {
     key: "routing",
     label: "Routing",
-    detail: "科室与专科分流",
+    detail: "Department route and specialist branch selection.",
     agents: ["department_router_agent", "specialist_router_agent"]
   },
   {
     key: "consultation",
     label: "Consultation",
-    detail: "医生与并发专科会诊",
+    detail: "Emergency physician, general practitioner, and parallel specialists.",
     agents: [
       "emergency_physician_agent",
       "general_practitioner_agent",
@@ -333,84 +165,36 @@ const journeyStageDefinitions = [
   },
   {
     key: "diagnostics",
-    label: "Diagnostics",
-    detail: "检查医嘱与结果解释",
-    agents: ["diagnostic_order_agent", "lab_advisor_agent", "lab_result_interpreter_agent", "imaging_interpreter_agent"]
+    label: "Exam Review Loop",
+    detail: "Ordering clinicians request exams; lab and imaging results return for clinician review.",
+    agents: ["lab_result_interpreter_agent", "imaging_interpreter_agent", "ordering_clinician_review_agent"]
   },
   {
     key: "medication",
     label: "Medication",
-    detail: "药房安全与用药计划",
+    detail: "Pharmacy safety review and medication planning.",
     agents: ["pharmacy_safety_agent", "medication_plan_agent"]
   },
   {
     key: "disposition",
     label: "Disposition",
-    detail: "随访、转诊或住院协调",
+    detail: "Follow-up, admission, human review, and care coordination.",
     agents: ["care_plan_agent", "follow_up_agent", "disposition_coordinator_agent", "admission_coordinator_agent"]
   },
   {
     key: "report",
     label: "Report",
-    detail: "最终病历报告",
+    detail: "Final hospital workflow report.",
     agents: ["final_hospital_report_agent"]
   }
 ] as const;
 
-const form = reactive({
+const form = reactive<EncounterForm>({
   patientId: "p001",
   doctorId: "d001",
   language: "zh-CN",
   caseText: "A 67-year-old male has fever, productive cough, chest discomfort and confusion."
 });
-
-const demoCases: DemoCase[] = [
-  {
-    id: "emergency_multi_specialty",
-    name: "急诊多专科",
-    preview: "胸痛、发热、呼吸困难和意识模糊，触发急诊和多专科会诊",
-    patientId: "p-emergency-001",
-    doctorId: "d-er-001",
-    language: "zh-CN",
-    caseText: "A 67-year-old male has fever, productive cough, chest discomfort, shortness of breath and confusion. He looks acutely ill and the family reports worsening symptoms over the last 12 hours."
-  },
-  {
-    id: "standard_outpatient",
-    name: "普通门诊",
-    preview: "咳嗽、发热、无明显红旗，触发门诊路径",
-    patientId: "p-outpatient-001",
-    doctorId: "d-gp-001",
-    language: "zh-CN",
-    caseText: "A 34-year-old female has cough, low-grade fever, sore throat and fatigue for three days. She is alert, able to drink fluids, and reports no chest pain, confusion or severe shortness of breath."
-  },
-  {
-    id: "low_risk_followup",
-    name: "低风险随访",
-    preview: "复诊咨询和轻症症状，突出随访/处置流程",
-    patientId: "p-followup-001",
-    doctorId: "d-followup-001",
-    language: "zh-CN",
-    caseText: "A 45-year-old male requests follow-up after a recent outpatient visit for mild seasonal allergies. Symptoms are improving with mild nasal congestion and no fever, chest pain, dyspnea or neurologic symptoms."
-  },
-  {
-    id: "human_review",
-    name: "人工审核",
-    preview: "高风险红旗和多系统症状，展示 human review tool 被 agent 主动选择",
-    patientId: "p-review-001",
-    doctorId: "d-review-001",
-    language: "zh-CN",
-    caseText: "A 72-year-old patient reports chest pain, shortness of breath, high fever and confusion after recent medication changes. The family is unsure about allergies and asks whether admission is needed."
-  },
-  {
-    id: "service_fallback",
-    name: "服务降级",
-    preview: "关闭病历或后续安排服务时，展示 tool unavailable fallback",
-    patientId: "p-fallback-001",
-    doctorId: "d-fallback-001",
-    language: "zh-CN",
-    caseText: "A 52-year-old patient has cough and fever with prior outpatient records expected, but external history or care coordination service may be unavailable during this demo."
-  }
-];
 
 const tasks = ref<AiTask[]>([]);
 const currentTask = ref<AiTask | null>(null);
@@ -421,6 +205,9 @@ const selectedTaskId = ref("");
 const errorMessage = ref("");
 const isCreating = ref(false);
 const pollingTaskId = ref<string | null>(null);
+const surgeCount = ref(5);
+const isSurgeRunning = ref(false);
+const surgeResults = ref<SurgeResult[]>([]);
 const serviceStatus = reactive({
   encounter: false,
   record: false
@@ -494,10 +281,10 @@ const isCurrentTaskPolling = computed(() => {
 
 const timelineCaption = computed(() => {
   if (timeline.value.length) {
-    return `${timeline.value.length} events · ${timelineAgentCount.value} agents`;
+    return `${timeline.value.length} events / ${timelineAgentCount.value} agents`;
   }
   if (selectedTaskId.value) {
-    return `Live polling · ${currentTask.value?.status || "UNKNOWN"}`;
+    return `Live polling / ${currentTask.value?.status || "UNKNOWN"}`;
   }
   return "Waiting for encounter";
 });
@@ -548,13 +335,13 @@ const journeyProgressPercent = computed(() => {
 
 const journeyProgressText = computed(() => {
   if (!selectedTaskId.value) {
-    return "创建或选择一个 Patient Encounter 后显示完整医院流程。";
+    return "Create or select a patient encounter to watch the hospital workflow.";
   }
   const activeStage = journeyStages.value.find((stage) => stage.state === "active");
   if (journeyProgressPercent.value === 100) {
-    return "医院多 Agent 流程已完成，最终记录可用于回看。";
+    return "Hospital multi-agent workflow completed; final record is ready for review.";
   }
-  return activeStage ? `当前阶段：${activeStage.label} · ${activeStage.detail}` : "正在同步 workflow progress。";
+  return activeStage ? `Current stage: ${activeStage.label} / ${activeStage.detail}` : "Syncing workflow progress.";
 });
 
 const workflowStats = computed(() => {
@@ -611,21 +398,13 @@ async function createEncounter() {
   isCreating.value = true;
   errorMessage.value = "";
   try {
-    const task = await requestJson<AiTask>("/api/ai/symptom-query", {
-      method: "POST",
-      body: JSON.stringify({
-        caseText: form.caseText,
-        question: "Run hospital consultation workflow",
-        patientId: form.patientId,
-        doctorId: form.doctorId,
-        language: form.language
-      })
+    const task = await createWorkflowTask({
+      caseText: form.caseText,
+      patientId: form.patientId,
+      doctorId: form.doctorId,
+      language: form.language
     });
-    selectedTaskId.value = task.taskId;
-    currentTask.value = task;
-    clinicalRecord.value = null;
-    await loadPatientHistory(task.patientId);
-    progressEvents.value = [];
+    await focusTask(task);
     await refreshTasks();
     void startTaskPolling(task.taskId);
   } catch (error) {
@@ -640,6 +419,116 @@ function applyDemoCase(demoCase: DemoCase) {
   form.doctorId = demoCase.doctorId;
   form.language = demoCase.language;
   form.caseText = demoCase.caseText;
+}
+
+async function runEmergencySurge(count: number) {
+  isSurgeRunning.value = true;
+  errorMessage.value = "";
+  const batchId = Date.now();
+  const surgeInputs = Array.from({ length: count }, (_, index) => ({
+    caseText: emergencySurgeTemplate.caseText,
+    patientId: `${emergencySurgeTemplate.patientId}-${batchId}-${index + 1}`,
+    doctorId: emergencySurgeTemplate.doctorId,
+    language: emergencySurgeTemplate.language
+  }));
+  surgeResults.value = surgeInputs.map((item) => ({
+    patientId: item.patientId,
+    status: "running",
+    message: "Submitting"
+  }));
+
+  try {
+    const submissions = await Promise.allSettled(surgeInputs.map((item) => createWorkflowTask(item)));
+    const createdTasks: AiTask[] = [];
+    surgeResults.value = submissions.map((outcome, index) => {
+      const input = surgeInputs[index];
+      if (outcome.status === "fulfilled") {
+        createdTasks.push(outcome.value);
+        return {
+          patientId: input.patientId,
+          taskId: outcome.value.taskId,
+          status: "running",
+          taskStatus: outcome.value.status,
+          message: "Submitted"
+        };
+      }
+      return {
+        patientId: input.patientId,
+        status: "failed",
+        message: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)
+      };
+    });
+
+    await refreshTasks();
+    if (createdTasks[0]) {
+      await focusTask(createdTasks[0]);
+      void startTaskPolling(createdTasks[0].taskId);
+    }
+    await Promise.allSettled(createdTasks.map((task) => pollSurgeTask(task)));
+    await refreshTasks();
+  } catch (error) {
+    setError(error);
+  } finally {
+    isSurgeRunning.value = false;
+  }
+}
+
+async function createWorkflowTask(input: { caseText: string; patientId: string; doctorId: string; language: string }) {
+  return requestJson<AiTask>("/api/ai/symptom-query", {
+    method: "POST",
+    body: JSON.stringify({
+      caseText: input.caseText,
+      question: "Run hospital consultation workflow",
+      patientId: input.patientId,
+      doctorId: input.doctorId,
+      language: input.language
+    })
+  });
+}
+
+async function focusTask(task: AiTask) {
+  selectedTaskId.value = task.taskId;
+  currentTask.value = task;
+  clinicalRecord.value = null;
+  patientHistory.value = null;
+  progressEvents.value = [];
+  await loadPatientHistory(task.patientId);
+}
+
+async function pollSurgeTask(task: AiTask) {
+  const deadline = Date.now() + 300000;
+  while (Date.now() < deadline) {
+    const latest = await requestJson<AiTask>(`/api/ai/tasks/${task.taskId}`);
+    updateSurgeResult(task.taskId, {
+      status: terminalStatuses.has(latest.status) ? "completed" : "running",
+      taskStatus: latest.status
+    });
+    if (terminalStatuses.has(latest.status)) {
+      try {
+        const record = await requestJson<ClinicalRecord>(`/api/records/${task.taskId}`);
+        updateSurgeResult(task.taskId, {
+          status: latest.status === "COMPLETED" ? "completed" : "failed",
+          readiness: extractSurgeReadiness(record),
+          practitionerAssignment: extractSurgePractitionerAssignment(record),
+          message: latest.errorMessage
+        });
+      } catch (error) {
+        updateSurgeResult(task.taskId, {
+          status: "failed",
+          message: error instanceof Error ? error.message : String(error)
+        });
+      }
+      return;
+    }
+    await delay(1200);
+  }
+  updateSurgeResult(task.taskId, { status: "failed", message: "Timed out waiting for task completion" });
+}
+
+function updateSurgeResult(taskId: string, patch: Partial<SurgeResult>) {
+  surgeResults.value = surgeResults.value.map((result) => {
+    return result.taskId === taskId ? { ...result, ...patch } : result;
+  });
 }
 
 async function refreshTasks() {
@@ -690,7 +579,7 @@ async function startTaskPolling(taskId: string) {
       }
       await delay(800);
     }
-    errorMessage.value = "任务 5 分钟内未完成，可以继续手动刷新。";
+    errorMessage.value = "Task did not finish within five minutes; refresh manually to continue.";
   } catch (error) {
     if (isActivePollingRun(taskId, runId)) {
       setError(error);

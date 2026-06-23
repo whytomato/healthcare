@@ -45,6 +45,25 @@ care-coordination-service
   -> 生成 followUpActions、referralActions、admissionActions、humanReviewRequired
   -> 不消费 Kafka；由 AdmissionCoordinatorAgent 通过 CareCoordinationTool 同步调用
   -> 服务不可用时，CareCoordinationTool 返回 unavailable 并生成本地 fallback plan
+
+emergency-encounter-service
+  -> POST /api/emergency/encounters
+  -> POST /api/emergency/encounters/readiness
+  -> 打开急诊 encounter 状态，并记录资源 readiness 回写
+
+practitioner-service
+  -> POST /api/practitioners/emergency-assignments
+  -> 为急诊高风险流程分配急诊医生、护士和必要专科医生
+
+resource-service
+  -> POST /api/resources/emergency-reservations
+  -> 为急诊高风险流程预留抢救室、观察床、监护设备等资源
+  -> 维护最小 constrained capacity，返回 ready / partial / unavailable readiness
+
+scheduling-service
+  -> POST /api/schedules/emergency-exams
+  -> 为开单 agent 创建急诊检查排程
+  -> 检查结果应回到开单 agent 复看，而不是只进入统一 LabAdvisor 汇总
 ```
 
 ## 持久化数据
@@ -91,6 +110,23 @@ clinical-record-service
 
 care-coordination-service
   POST /api/care/coordination-plans
+  GET  /health
+
+emergency-encounter-service
+  POST /api/emergency/encounters
+  POST /api/emergency/encounters/readiness
+  GET  /health
+
+practitioner-service
+  POST /api/practitioners/emergency-assignments
+  GET  /health
+
+resource-service
+  POST /api/resources/emergency-reservations
+  GET  /health
+
+scheduling-service
+  POST /api/schedules/emergency-exams
   GET  /health
 ```
 
@@ -202,6 +238,33 @@ TriageNurseAgent
 `handoff_timeline` 是 workflow 展示主契约，用于记录 agent 完成、行政建档、生命体征、分诊、科室路由、检查医嘱、检验解释、影像解释、用药计划、处置、住院协调、交接、并发专科 fan-out 和 fan-in 汇总事件。
 
 前端 `AgentWorkflowGraph.vue` 使用 Vue Flow 将 `handoff_timeline` 渲染为本次 Patient Encounter 的 workflow 覆盖图。图中 agent 节点表示医院角色，实线表示本次实际 handoff，虚线表示系统存在但本次未触发的分支，边标签显示 agent 决策，tool 节点可按需打开以展示 `tool_invoked` / `tool_skipped` / unavailable。
+
+## Emergency Room Minimal Demonstrator
+
+下一阶段急诊最小演示优先强化微服务参与 workflow。高风险病例进入急诊分支后，`EmergencyPhysicianAgent` 会前置调用：
+
+```text
+EmergencyEncounterTool     -> emergency-encounter-service
+PractitionerAssignmentTool -> practitioner-service
+ResourceReservationTool    -> resource-service
+ExamSchedulingTool         -> scheduling-service
+```
+
+这些 tool 的结果进入 `handoff_timeline`，用于展示急诊医生如何先打开急诊 encounter，再安排人员、预留资源、回写 readiness、创建检查排程。分科专家也可以通过 `ExamSchedulingTool` 开出本专科检查；检查结果应回到开单 agent 复看，形成“初诊 - 检查 - 医生查看检查结果”的闭环。已有 `LabAdvisorAgent` 和 `DiagnosticOrderAgent` 保留，不删除，但在急诊最小链路中不再必须作为唯一检查入口。
+
+## Current Ordering Clinician Review Loop
+
+The current default workflow pauses `LabAdvisorAgent` and `DiagnosticOrderAgent` without deleting their implementations. Exams are now requested by the ordering clinician role itself: `EmergencyPhysicianAgent` or one of the specialist agents can call `ExamSchedulingTool`, then `LabResultInterpreterAgent` and `ImagingInterpreterAgent` interpret the results, and `OrderingClinicianReviewAgent` performs the review step before `PharmacySafetyAgent`.
+
+```text
+EmergencyPhysicianAgent / SpecialistAgent
+  -> ExamSchedulingTool
+  -> LabResultInterpreterAgent + ImagingInterpreterAgent
+  -> OrderingClinicianReviewAgent
+  -> PharmacySafetyAgent
+```
+
+The frontend `Emergency Surge Scenario` submits several real high-acuity encounters concurrently and reads each final clinical record for the `resource_reservation` tool event. This exposes `readinessStatus`, `reservedResources`, and `unavailableResources` from the ER microservice path while preserving the normal per-encounter multi-agent workflow.
 
 ## Patient History Summary
 

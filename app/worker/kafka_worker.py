@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import json
 import os
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from app.config import load_env_file
@@ -25,6 +27,12 @@ def main() -> None:
     parser.add_argument("--result-topic", default=DEFAULT_RESULT_TOPIC)
     parser.add_argument("--progress-topic", default=DEFAULT_PROGRESS_TOPIC)
     parser.add_argument("--group-id", default="healthcare-ai-worker")
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=int(os.getenv("HEALTHCARE_WORKER_CONCURRENCY", "1")),
+        help="Number of Kafka workflow tasks this worker may process concurrently.",
+    )
     args = parser.parse_args()
 
     load_env_file()
@@ -46,6 +54,7 @@ def main() -> None:
         result_topic=args.result_topic,
         progress_topic=args.progress_topic,
         group_id=args.group_id,
+        concurrency=max(args.concurrency, 1),
     )
 
 
@@ -94,6 +103,7 @@ def run_kafka_worker(
     result_topic: str,
     progress_topic: str,
     group_id: str,
+    concurrency: int,
 ) -> None:
     try:
         from kafka import KafkaConsumer, KafkaProducer
@@ -111,6 +121,7 @@ def run_kafka_worker(
             value_deserializer=lambda value: json.loads(value.decode("utf-8")),
             enable_auto_commit=True,
             auto_offset_reset="earliest",
+            max_poll_records=concurrency,
         )
         producer = KafkaProducer(
             bootstrap_servers=bootstrap_servers,
@@ -124,30 +135,65 @@ def run_kafka_worker(
             "Then check: docker ps"
         ) from exc
 
-    print(f"listening on Kafka topic {query_topic}, producing to {result_topic}")
-    for message in consumer:
-        payload: dict[str, Any] = message.value
-        task = SymptomQueryTask(
-            task_id=payload["taskId"],
-            case_text=payload["caseText"],
-            question=payload.get("question", "What diseases or conditions should be considered?"),
-            patient_id=payload.get("patientId"),
-            doctor_id=payload.get("doctorId"),
-            language=payload.get("language", "zh-CN"),
-            metadata=payload.get("metadata", {}),
-        )
+    producer_lock = Lock()
+    pending_futures: set[Future[None]] = set()
+    print(
+        f"listening on Kafka topic {query_topic}, producing to {result_topic}, "
+        f"concurrency={concurrency}"
+    )
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        for message in consumer:
+            payload: dict[str, Any] = message.value
+            task = SymptomQueryTask(
+                task_id=payload["taskId"],
+                case_text=payload["caseText"],
+                question=payload.get("question", "What diseases or conditions should be considered?"),
+                patient_id=payload.get("patientId"),
+                doctor_id=payload.get("doctorId"),
+                language=payload.get("language", "zh-CN"),
+                metadata=payload.get("metadata", {}),
+            )
+            pending_futures.add(
+                executor.submit(
+                    submit_kafka_task,
+                    task,
+                    producer,
+                    producer_lock,
+                    result_topic,
+                    progress_topic,
+                )
+            )
+            if len(pending_futures) >= concurrency:
+                done, pending = wait(pending_futures, return_when=FIRST_COMPLETED)
+                pending_futures = set(pending)
+                _raise_failed_futures(done)
 
-        def publish_progress(event: dict[str, Any]) -> None:
+
+def submit_kafka_task(
+    task: SymptomQueryTask,
+    producer: Any,
+    producer_lock: Lock,
+    result_topic: str,
+    progress_topic: str,
+) -> None:
+    def publish_progress(event: dict[str, Any]) -> None:
+        with producer_lock:
             producer.send(progress_topic, event)
             producer.flush()
 
-        result = process_task(
-            task,
-            progress_publisher=publish_progress,
-        )
+    result = process_task(
+        task,
+        progress_publisher=publish_progress,
+    )
+    with producer_lock:
         producer.send(result_topic, to_backend_result_payload(result))
         producer.flush()
-        print(f"processed Kafka task {task.task_id}: {result.status}")
+    print(f"processed Kafka task {task.task_id}: {result.status}")
+
+
+def _raise_failed_futures(futures: set[Future[None]]) -> None:
+    for future in futures:
+        future.result()
 
 
 def to_backend_result_payload(result: SymptomQueryResult) -> dict[str, Any]:

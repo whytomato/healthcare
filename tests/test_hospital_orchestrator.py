@@ -117,10 +117,137 @@ class FakeCareCoordinationTool:
         }
 
 
+class FakePractitionerAssignmentTool:
+    name = "practitioner_assignment"
+
+    def run(
+        self,
+        task_id: str,
+        patient_id: str | None,
+        urgency_level: str,
+        required_specialties: list[str],
+    ) -> dict:
+        return {
+            "tool": self.name,
+            "status": "ready",
+            "summary": "Mock practitioner assignment returned.",
+            "payload": {
+                "taskId": task_id,
+                "patientId": patient_id,
+                "urgencyLevel": urgency_level,
+                "requiredSpecialties": required_specialties,
+                "assignedPractitioners": ["emergency_physician_on_call"],
+                "unavailableSpecialties": [],
+                "assignmentStatus": "ready",
+            },
+        }
+
+
+class FakeEmergencyEncounterTool:
+    name = "emergency_encounter"
+
+    def run(
+        self,
+        task_id: str,
+        patient_id: str | None,
+        triage_urgency: str,
+        red_flags: list[str],
+    ) -> dict:
+        return {
+            "tool": self.name,
+            "status": "ready",
+            "summary": "Mock emergency encounter returned.",
+            "payload": {
+                "taskId": task_id,
+                "patientId": patient_id,
+                "emergencyEncounterId": f"mock-{task_id}",
+                "status": "opened",
+                "triageUrgency": triage_urgency,
+                "redFlags": red_flags,
+            },
+        }
+
+    def update_readiness(
+        self,
+        task_id: str,
+        emergency_encounter_id: str,
+        resource_readiness_status: str,
+        reserved_resources: list[str],
+    ) -> dict:
+        return {
+            "tool": "emergency_readiness_update",
+            "status": "ready",
+            "summary": "Mock emergency readiness update returned.",
+            "payload": {
+                "taskId": task_id,
+                "emergencyEncounterId": emergency_encounter_id,
+                "status": "readiness_confirmed",
+                "resourceReadinessStatus": resource_readiness_status,
+                "reservedResources": reserved_resources,
+            },
+        }
+
+
+class FakeResourceReservationTool:
+    name = "resource_reservation"
+
+    def run(
+        self,
+        task_id: str,
+        patient_id: str | None,
+        urgency_level: str,
+        required_resources: list[str],
+    ) -> dict:
+        return {
+            "tool": self.name,
+            "status": "ready",
+            "summary": "Mock resource reservation returned.",
+            "payload": {
+                "taskId": task_id,
+                "patientId": patient_id,
+                "urgencyLevel": urgency_level,
+                "requiredResources": required_resources,
+                "reservedResources": required_resources or ["resuscitation_room"],
+                "readinessStatus": "ready",
+            },
+        }
+
+
+class FakeExamSchedulingTool:
+    name = "exam_scheduling"
+
+    def run(
+        self,
+        task_id: str,
+        patient_id: str | None,
+        ordering_agent: str,
+        requested_exams: list[str],
+        urgency_level: str,
+    ) -> dict:
+        return {
+            "tool": self.name,
+            "status": "ready",
+            "summary": "Mock exam scheduling returned.",
+            "payload": {
+                "taskId": task_id,
+                "patientId": patient_id,
+                "orderingAgent": ordering_agent,
+                "requestedExams": requested_exams,
+                "scheduledExams": requested_exams,
+                "scheduleStatus": "ready",
+                "urgencyLevel": urgency_level,
+            },
+        }
+
+
 class FastClinicalToolRegistry(ClinicalToolRegistry):
     def __init__(self) -> None:
         super().__init__()
         self.care_coordination = FakeCareCoordinationTool()
+        self.emergency_encounter = FakeEmergencyEncounterTool()
+        self.practitioner_assignment = FakePractitionerAssignmentTool()
+        self.resource_reservation = FakeResourceReservationTool()
+        self.exam_scheduling = FakeExamSchedulingTool()
 
 
 class SlowFakeHospitalLlmClient(FakeHospitalLlmClient):
@@ -190,6 +317,7 @@ def test_final_hospital_report_agent_returns_markdown_for_frontend_rendering() -
     result = HospitalOrchestrator(
         llm_client=FakeHospitalLlmClient(),
         consultation_tool=FakeAIConsultationTool(),
+        tool_registry=FastClinicalToolRegistry(),
     ).run(
         case_text="A 67-year-old male has fever, productive cough, chest discomfort and confusion.",
         patient_id="p001",
@@ -233,6 +361,7 @@ def test_default_hospital_workflow_is_scheduled_from_agent_handoffs() -> None:
     result = HospitalOrchestrator(
         llm_client=FakeHospitalLlmClient(),
         consultation_tool=FakeAIConsultationTool(),
+        tool_registry=FastClinicalToolRegistry(),
     ).run(
         case_text="67-year-old male with fever, productive cough, chest pain, shortness of breath and confusion.",
         patient_id="p001",
@@ -285,6 +414,7 @@ def test_hospital_workflow_models_complete_demo_hospital_visit_decision_points()
     result = HospitalOrchestrator(
         llm_client=FakeHospitalLlmClient(),
         consultation_tool=FakeAIConsultationTool(),
+        tool_registry=FastClinicalToolRegistry(),
     ).run(
         case_text="67-year-old male with fever, productive cough, chest discomfort and confusion.",
         patient_id="p001",
@@ -295,9 +425,9 @@ def test_hospital_workflow_models_complete_demo_hospital_visit_decision_points()
         "registration_agent",
         "nurse_vitals_agent",
         "department_router_agent",
-        "diagnostic_order_agent",
         "lab_result_interpreter_agent",
         "imaging_interpreter_agent",
+        "ordering_clinician_review_agent",
         "medication_plan_agent",
         "admission_coordinator_agent",
     ]
@@ -313,9 +443,9 @@ def test_hospital_workflow_models_complete_demo_hospital_visit_decision_points()
     assert decisions["registration_completed"]["decision_scope"] == "administrative"
     assert decisions["abnormal_vitals_detected"]["decision_scope"] == "triage"
     assert decisions["department_route_selected"]["decision_scope"] == "routing"
-    assert decisions["diagnostic_orders_created"]["decision_scope"] == "orders"
     assert decisions["lab_results_interpreted"]["decision_scope"] == "clinical"
     assert decisions["imaging_results_interpreted"]["decision_scope"] == "clinical"
+    assert decisions["ordering_clinician_review_completed"]["decision_scope"] == "review_loop"
     assert decisions["medication_plan_created"]["decision_scope"] == "medication"
     assert decisions["admission_pathway_selected"]["decision_scope"] == "admission"
 
@@ -344,7 +474,9 @@ def test_high_risk_patient_encounter_follows_emergency_branch() -> None:
             "cardiology_specialist_agent",
             "infectious_disease_specialist_agent",
             "neurology_specialist_agent",
-            "diagnostic_order_agent",
+            "lab_result_interpreter_agent",
+            "imaging_interpreter_agent",
+            "ordering_clinician_review_agent",
         ],
     )
     assert result["workflow_decisions"][0] == {
@@ -523,16 +655,14 @@ def test_hospital_agents_choose_from_multiple_internal_tools_during_visit() -> N
 
     assert {
         "guideline_lookup",
-        "lab_order",
+        "exam_scheduling",
         "lab_result_fetch",
-        "imaging_order",
         "imaging_result_fetch",
         "medication_interaction",
         "bed_availability",
         "human_review_request",
     }.issubset(tool_names)
-    assert tool_statuses["lab_order"] == "ready"
-    assert tool_statuses["imaging_order"] == "ready"
+    assert tool_statuses["exam_scheduling"] in {"ready", "unavailable"}
     assert tool_statuses["bed_availability"] == "ready"
     assert tool_statuses["human_review_request"] == "ready"
 
@@ -768,8 +898,9 @@ def test_hospital_orchestrator_runs_selected_specialist_consultations_in_paralle
             "emergency_physician_agent",
             "general_practitioner_agent",
             "specialist_router_agent",
-            "diagnostic_order_agent",
             "lab_result_interpreter_agent",
+            "imaging_interpreter_agent",
+            "ordering_clinician_review_agent",
             "pharmacy_safety_agent",
             "medication_plan_agent",
             "disposition_coordinator_agent",
@@ -807,7 +938,7 @@ def test_hospital_orchestrator_returns_agent_handoff_timeline() -> None:
 
     assert decisions["emergency_branch"]["decision_scope"] == "routing"
     assert decisions["specialist_consultation_branch"]["decision_scope"] == "routing"
-    assert decisions["diagnostic_workup_selected"]["decision_scope"] == "clinical"
+    assert decisions["ordering_clinician_review_completed"]["decision_scope"] == "review_loop"
     assert decisions["medication_safety_review_required"]["decision_scope"] == "clinical"
     assert decisions["emergency_reassessment"]["decision_scope"] == "disposition"
 
@@ -843,7 +974,7 @@ def test_timeline_explains_role_scoped_agent_decisions_and_tool_choices() -> Non
         "emergency_branch",
         "department_route_selected",
         "specialist_consultation_branch",
-        "diagnostic_orders_created",
+        "ordering_clinician_review_completed",
         "medication_safety_review_required",
         "emergency_reassessment",
         "admission_pathway_selected",
@@ -981,16 +1112,194 @@ def test_hospital_orchestrator_waits_for_lab_and_imaging_before_pharmacy_fanin()
         event
         for event in timeline
         if event["event_type"] == "fanin_completed"
-        and event["target_agents"] == ["pharmacy_safety_agent"]
+        and event["target_agents"] == ["ordering_clinician_review_agent"]
     )
 
     assert fanin["payload"]["completed_agents"] == [
         "lab_result_interpreter_agent",
         "imaging_interpreter_agent",
     ]
-    assert completed_index["lab_result_interpreter_agent"] < completed_index["pharmacy_safety_agent"]
-    assert completed_index["imaging_interpreter_agent"] < completed_index["pharmacy_safety_agent"]
-    assert fanin["event_index"] < completed_index["pharmacy_safety_agent"]
+    assert completed_index["lab_result_interpreter_agent"] < completed_index["ordering_clinician_review_agent"]
+    assert completed_index["imaging_interpreter_agent"] < completed_index["ordering_clinician_review_agent"]
+    assert fanin["event_index"] < completed_index["ordering_clinician_review_agent"]
+    assert completed_index["ordering_clinician_review_agent"] < completed_index["pharmacy_safety_agent"]
+
+
+def test_emergency_room_workflow_front_loads_microservice_resource_readiness() -> None:
+    result = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+        tool_registry=FastClinicalToolRegistry(),
+    ).run(
+        case_text="67-year-old male with chest pain, shortness of breath, fever and confusion.",
+        patient_id="p-er-001",
+        doctor_id="d-er-001",
+        metadata={"taskId": "er-task-001"},
+    )
+
+    tool_events = [
+        event
+        for event in result["handoff_timeline"]
+        if event["event_type"] in {"tool_invoked", "tool_skipped"}
+    ]
+    emergency_tools = {
+        event["payload"]["tool"]: event
+        for event in tool_events
+        if event["agent"] == "emergency_physician_agent"
+    }
+
+    assert emergency_tools["practitioner_assignment"]["event_type"] == "tool_invoked"
+    assert emergency_tools["resource_reservation"]["event_type"] == "tool_invoked"
+    assert emergency_tools["exam_scheduling"]["event_type"] == "tool_invoked"
+    assert emergency_tools["practitioner_assignment"]["payload"]["choice"] in {"selected", "unavailable"}
+    assert emergency_tools["resource_reservation"]["payload"]["choice"] in {"selected", "unavailable"}
+    assert emergency_tools["exam_scheduling"]["payload"]["choice"] in {"selected", "unavailable"}
+    assert "assignedPractitioners" in emergency_tools["practitioner_assignment"]["payload"]
+    assert "unavailableSpecialties" in emergency_tools["practitioner_assignment"]["payload"]
+    assert emergency_tools["exam_scheduling"]["payload"]["orderingAgent"] == "emergency_physician_agent"
+    assert "resuscitation_room" in emergency_tools["resource_reservation"]["payload"]["reservedResources"]
+    assert any(
+        event["event_type"] == "decision_made"
+        and event["agent"] == "emergency_physician_agent"
+        and event["decision"] == "emergency_resource_readiness_confirmed"
+        for event in result["handoff_timeline"]
+    )
+
+
+def test_emergency_room_workflow_opens_emergency_encounter_before_resource_allocation() -> None:
+    result = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="67-year-old male with chest pain, shortness of breath, fever and confusion.",
+        patient_id="p-er-003",
+        doctor_id="d-er-001",
+        metadata={"taskId": "er-task-003"},
+    )
+
+    emergency_tool_events = [
+        event
+        for event in result["handoff_timeline"]
+        if event["event_type"] in {"tool_invoked", "tool_skipped"}
+        and event["agent"] == "emergency_physician_agent"
+    ]
+    event_by_tool = {
+        event["payload"]["tool"]: event
+        for event in emergency_tool_events
+    }
+
+    assert event_by_tool["emergency_encounter"]["event_type"] == "tool_invoked"
+    assert event_by_tool["emergency_encounter"]["payload"]["triageUrgency"] == "high"
+    assert event_by_tool["emergency_encounter"]["event_index"] < event_by_tool[
+        "practitioner_assignment"
+    ]["event_index"]
+    assert event_by_tool["emergency_encounter"]["event_index"] < event_by_tool[
+        "resource_reservation"
+    ]["event_index"]
+    assert event_by_tool["emergency_encounter"]["event_index"] < event_by_tool[
+        "exam_scheduling"
+    ]["event_index"]
+
+
+def test_emergency_room_workflow_updates_emergency_encounter_after_resource_reservation() -> None:
+    result = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+        tool_registry=FastClinicalToolRegistry(),
+    ).run(
+        case_text="67-year-old male with chest pain, shortness of breath, fever and confusion.",
+        patient_id="p-er-004",
+        doctor_id="d-er-001",
+        metadata={"taskId": "er-task-004"},
+    )
+
+    emergency_tool_events = [
+        event
+        for event in result["handoff_timeline"]
+        if event["event_type"] in {"tool_invoked", "tool_skipped"}
+        and event["agent"] == "emergency_physician_agent"
+    ]
+    event_by_tool = {
+        event["payload"]["tool"]: event
+        for event in emergency_tool_events
+    }
+
+    assert event_by_tool["emergency_readiness_update"]["event_type"] == "tool_invoked"
+    assert event_by_tool["resource_reservation"]["event_index"] < event_by_tool[
+        "emergency_readiness_update"
+    ]["event_index"]
+    assert event_by_tool["emergency_readiness_update"]["payload"][
+        "resourceReadinessStatus"
+    ] == event_by_tool["resource_reservation"]["payload"]["readinessStatus"]
+    assert event_by_tool["emergency_readiness_update"]["payload"]["reservedResources"]
+
+
+def test_specialist_orders_exams_and_receives_ordering_clinician_review_signal() -> None:
+    result = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="67-year-old male with chest pain, shortness of breath, fever and confusion.",
+        patient_id="p-er-002",
+        doctor_id="d-er-001",
+        metadata={"taskId": "er-task-002"},
+    )
+
+    tool_events = [
+        event
+        for event in result["handoff_timeline"]
+        if event["event_type"] in {"tool_invoked", "tool_skipped"}
+    ]
+    specialist_exam_schedules = [
+        event
+        for event in tool_events
+        if event["payload"]["tool"] == "exam_scheduling"
+        and event["agent"].endswith("_specialist_agent")
+    ]
+
+    assert specialist_exam_schedules
+    assert all(
+        event["payload"]["orderingAgent"] == event["agent"]
+        for event in specialist_exam_schedules
+    )
+    assert any(
+        event["event_type"] == "decision_made"
+        and event["decision"] == "ordering_clinician_review_required"
+        and event["payload"]["ordering_agent"].endswith("_specialist_agent")
+        for event in result["handoff_timeline"]
+    )
+
+
+def test_workflow_pauses_lab_advisor_and_diagnostic_order_agents_for_ordering_clinician_loop() -> None:
+    result = HospitalOrchestrator(
+        llm_client=FakeHospitalLlmClient(),
+        consultation_tool=FakeAIConsultationTool(),
+    ).run(
+        case_text="67-year-old male with chest pain, shortness of breath, fever and confusion.",
+        patient_id="p-loop-001",
+        doctor_id="d-er-001",
+        metadata={"taskId": "loop-task-001"},
+    )
+
+    path = result["executed_path"]
+    assert "lab_advisor_agent" not in path
+    assert "diagnostic_order_agent" not in path
+    assert "lab_result_interpreter_agent" in path
+    assert "imaging_interpreter_agent" in path
+    assert "ordering_clinician_review_agent" in path
+    assert path.index("lab_result_interpreter_agent") < path.index("ordering_clinician_review_agent")
+    assert path.index("imaging_interpreter_agent") < path.index("ordering_clinician_review_agent")
+
+    decisions = [
+        event
+        for event in result["handoff_timeline"]
+        if event["event_type"] == "decision_made"
+    ]
+    assert any(
+        event["decision"] == "ordering_clinician_review_completed"
+        and event["payload"]["ordering_agents"]
+        for event in decisions
+    )
 
 
 def test_hospital_cli_writes_complete_workflow_result() -> None:

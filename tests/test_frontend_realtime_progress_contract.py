@@ -52,12 +52,48 @@ def test_frontend_merges_live_progress_with_final_timeline_and_report_shapes() -
 
 def test_frontend_exposes_demo_cases_for_stable_manual_flow_demos() -> None:
     app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
+    sidebar = Path("frontend/src/components/EncounterSidebar.vue").read_text(encoding="utf-8")
+    demo_cases = Path("frontend/src/demoCases.ts").read_text(encoding="utf-8")
 
-    assert "Demo Cases" in app
-    assert "急诊多专科" in app
-    assert "普通门诊" in app
-    assert "低风险随访" in app
-    assert "@click=\"applyDemoCase(demoCase)\"" in app
+    assert "EncounterSidebar" in app
+    assert "Demo Cases" in sidebar
+    assert "emergency_multi_specialty" in demo_cases
+    assert "standard_outpatient" in demo_cases
+    assert "low_risk_followup" in demo_cases
+    assert "@click=\"emit('apply-demo-case', demoCase)\"" in sidebar
+
+
+def test_frontend_exposes_emergency_surge_panel_for_concurrent_er_demo() -> None:
+    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
+    surge_panel = Path("frontend/src/components/EmergencySurgePanel.vue").read_text(encoding="utf-8")
+    demo_cases = Path("frontend/src/demoCases.ts").read_text(encoding="utf-8")
+
+    assert "EmergencySurgePanel" in app
+    assert "runEmergencySurge" in app
+    assert "Promise.allSettled" in app
+    assert "surgeResults" in app
+    assert "extractSurgeReadiness" in app
+    assert "extractSurgePractitionerAssignment" in app
+    assert "Emergency Surge Scenario" in surge_panel
+    assert "resource_reservation" in surge_panel
+    assert "practitioner_assignment" in surge_panel
+    assert "readinessStatus" in surge_panel
+    assert "assignedPractitioners" in surge_panel
+    assert "unavailableSpecialties" in surge_panel
+    assert "emergency_surge_template" in demo_cases
+
+
+def test_frontend_app_shell_uses_smaller_componentized_entrypoint() -> None:
+    app_path = Path("frontend/src/App.vue")
+    app = app_path.read_text(encoding="utf-8")
+
+    assert Path("frontend/src/types.ts").is_file()
+    assert Path("frontend/src/demoCases.ts").is_file()
+    assert Path("frontend/src/components/EncounterSidebar.vue").is_file()
+    assert "from \"./types\"" in app
+    assert "from \"./demoCases\"" in app
+    assert "EncounterSidebar" in app
+    assert len(app.splitlines()) < 760
 
 
 def test_frontend_presents_a_hospital_journey_overview_for_the_whole_flow() -> None:
@@ -156,6 +192,16 @@ def test_frontend_graph_distinguishes_selected_skipped_tool_and_parallel_paths()
     assert "edge-tool-selected" in graph
     assert "edge-tool-skipped" in graph
     assert "edge-tool-unavailable" in graph
+    assert "practitioner_assignment" in graph
+    assert "resource_reservation" in graph
+    assert "exam_scheduling" in graph
+    assert "emergency_encounter" in graph
+    assert "emergency_readiness_update" in graph
+    assert "Practitioner Assignment" in graph
+    assert "Resource Reservation" in graph
+    assert "Exam Scheduling" in graph
+    assert "Emergency Encounter" in graph
+    assert "Readiness Update" in graph
     assert "edge-mode-parallel" in styles
     assert "graph-node-${status}" in graph
     assert ".graph-legend" in styles

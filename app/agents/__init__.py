@@ -7,6 +7,7 @@ from app.agents.diagnostics import (
     DiagnosticOrderAgent,
     ImagingInterpreterAgent,
     LabResultInterpreterAgent,
+    OrderingClinicianReviewAgent,
 )
 from app.agents.disposition import DispositionCoordinatorAgent
 from app.agents.emergency import EmergencyPhysicianAgent
@@ -50,6 +51,7 @@ __all__ = [
     "MedicationPlanAgent",
     "NeurologySpecialistAgent",
     "NurseVitalsAgent",
+    "OrderingClinicianReviewAgent",
     "PharmacySafetyAgent",
     "RegistrationAgent",
     "RespiratorySpecialistAgent",

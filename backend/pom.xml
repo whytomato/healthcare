@@ -16,6 +16,10 @@
         <module>triage-service</module>
         <module>clinical-record-service</module>
         <module>care-coordination-service</module>
+        <module>emergency-encounter-service</module>
+        <module>practitioner-service</module>
+        <module>resource-service</module>
+        <module>scheduling-service</module>
     </modules>
 
     <properties>

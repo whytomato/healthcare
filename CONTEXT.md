@@ -16,6 +16,10 @@ _Avoid_: Production hospital platform, isolated symptom query
 A single healthcare service episode that starts from a patient request or appointment and gathers triage, consultation, evidence, orders, reports, and follow-up decisions.
 _Avoid_: Raw symptom query, isolated prompt
 
+**Emergency Room Minimal Demonstrator**:
+A focused emergency-care vertical slice used to exercise high-urgency patient flow, microservice-backed clinical operations, resource constraints, and agent handoffs under test.
+_Avoid_: Full hospital platform, outpatient workflow expansion, generic healthcare demo
+
 **Task Status**:
 The user-facing progress state of a patient encounter workflow, used to tell whether the demo workflow is received, published, completed, failed, or waiting for more data.
 _Avoid_: Clinical record, final report
@@ -55,6 +59,30 @@ _Avoid_: Fixed agent chain, always-run specialist pipeline
 **Parallel Consultation Workflow**:
 A workflow pattern where independent consultation roles for the same patient encounter can produce their handoffs concurrently after shared upstream context is available.
 _Avoid_: Branched workflow, sequential consultation chain
+
+**Initial Consultation - Exam - Review Loop**:
+A clinical workflow pattern where a physician or specialist makes an initial assessment, orders exams or tests, receives results, and then reviews the patient again before disposition.
+_Avoid_: One-pass diagnosis, centralized lab-advisor-only routing, final-report-only review
+
+**Ordering Clinician Review**:
+The review step where exam or test results return to the clinician who ordered them, so the same role can update assessment and next actions.
+_Avoid_: Centralized result review, final-report-only interpretation, disconnected lab advisor handoff
+
+**Emergency Resource Readiness**:
+The emergency-room readiness state for personnel, rooms, beds, equipment, and urgent scheduling before a patient enters a high-acuity treatment step.
+_Avoid_: Final admission paperwork, passive capacity note, report-only resource summary
+
+**Persistent ER Resource Scheduling**:
+A demo-grade emergency resource service capability where rooms, beds, monitors, and observation capacity are stored in the database, reserved transactionally, and reported as ready, partial, or unavailable.
+_Avoid_: In-memory-only capacity counter, static report text, frontend-only resource status
+
+**Persistent Practitioner Assignment**:
+A demo-grade practitioner service capability where on-shift clinicians, specialties, active assignment counts, and assignment records are stored in the database and used to allocate staff under ER surge conditions.
+_Avoid_: Static doctor-name generation, frontend-only staff display, one prompt deciding staffing without service state
+
+**Emergency Surge Scenario**:
+A manual or automated demo scenario where multiple high-acuity patient encounters are submitted concurrently, causing emergency-room agents to compete for finite practitioner, room, monitor, and exam-scheduling capacity.
+_Avoid_: Mocked frontend-only stress test, raw HTTP benchmark, replacing the per-encounter agent workflow
 
 **Agent Handoff Timeline**:
 A chronological record of how hospital role agents complete work, make decisions, create handoffs, branch, run parallel consultations, and converge into downstream roles during a patient encounter.

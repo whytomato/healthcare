@@ -26,6 +26,7 @@ from app.agents import (
     MedicationPlanAgent,
     NeurologySpecialistAgent,
     NurseVitalsAgent,
+    OrderingClinicianReviewAgent,
     PharmacySafetyAgent,
     RegistrationAgent,
     RespiratorySpecialistAgent,
@@ -63,22 +64,36 @@ class HospitalOrchestrator:
             "appointment_agent": AppointmentAgent(),
             "triage_nurse_agent": TriageNurseAgent(self.tool_registry),
             "department_router_agent": DepartmentRouterAgent(),
-            "emergency_physician_agent": EmergencyPhysicianAgent(self.llm_client),
+            "emergency_physician_agent": EmergencyPhysicianAgent(
+                self.llm_client,
+                self.tool_registry,
+            ),
             "general_practitioner_agent": GeneralPractitionerAgent(
                 self.llm_client,
                 self.consultation_tool,
             ),
             "specialist_router_agent": SpecialistRouterAgent(),
-            "respiratory_specialist_agent": RespiratorySpecialistAgent(self.llm_client),
-            "cardiology_specialist_agent": CardiologySpecialistAgent(self.llm_client),
-            "infectious_disease_specialist_agent": InfectiousDiseaseSpecialistAgent(
-                self.llm_client
+            "respiratory_specialist_agent": RespiratorySpecialistAgent(
+                self.llm_client,
+                self.tool_registry,
             ),
-            "neurology_specialist_agent": NeurologySpecialistAgent(self.llm_client),
+            "cardiology_specialist_agent": CardiologySpecialistAgent(
+                self.llm_client,
+                self.tool_registry,
+            ),
+            "infectious_disease_specialist_agent": InfectiousDiseaseSpecialistAgent(
+                self.llm_client,
+                self.tool_registry,
+            ),
+            "neurology_specialist_agent": NeurologySpecialistAgent(
+                self.llm_client,
+                self.tool_registry,
+            ),
             "diagnostic_order_agent": DiagnosticOrderAgent(self.tool_registry),
             "lab_advisor_agent": LabAdvisorAgent(),
             "lab_result_interpreter_agent": LabResultInterpreterAgent(self.tool_registry),
             "imaging_interpreter_agent": ImagingInterpreterAgent(self.tool_registry),
+            "ordering_clinician_review_agent": OrderingClinicianReviewAgent(),
             "pharmacy_safety_agent": PharmacySafetyAgent(
                 self.patient_history_tool,
                 self.tool_registry,
@@ -216,7 +231,7 @@ class HospitalOrchestrator:
                     "lab_result_interpreter_agent",
                     "imaging_interpreter_agent",
                 },
-                target_agents=["pharmacy_safety_agent"],
+                target_agents=["ordering_clinician_review_agent"],
                 parallel_group="diagnostic_results_fanin",
             )
         ]
@@ -403,7 +418,7 @@ class _HandoffTimeline:
         completed_agents = [agent.name for agent in agents]
         self.record_fanin_agents(
             completed_agents=completed_agents,
-            target_agents=["lab_advisor_agent", "pharmacy_safety_agent"],
+            target_agents=["lab_result_interpreter_agent", "imaging_interpreter_agent"],
             parallel_group=parallel_group,
         )
 
@@ -551,6 +566,21 @@ def _decision_events(result: Any) -> list[dict[str, Any]]:
                 },
             }
         ]
+    if agent == "emergency_physician_agent":
+        return [
+            {
+                "event_type": "decision_made",
+                "agent": agent,
+                "decision": "emergency_resource_readiness_confirmed",
+                "decision_scope": "resource_readiness",
+                "reason": "emergency physician requested staff, resources, and stat exams before downstream review",
+                "payload": {
+                    "readiness": decisions.get("emergency_resource_readiness"),
+                    "ordering_agent": decisions.get("ordering_agent"),
+                    "ordered_exams": decisions.get("ordered_exams", []),
+                },
+            }
+        ]
     if agent == "specialist_router_agent":
         selected = decisions.get("selected_specialties", [])
         return [
@@ -570,6 +600,21 @@ def _decision_events(result: Any) -> list[dict[str, Any]]:
                         }
                         for specialty in selected
                     ],
+                },
+            }
+        ]
+    if agent.endswith("_specialist_agent"):
+        return [
+            {
+                "event_type": "decision_made",
+                "agent": agent,
+                "decision": "ordering_clinician_review_required",
+                "decision_scope": "review_loop",
+                "reason": "exam results should return to the clinician that ordered them",
+                "payload": {
+                    "ordering_agent": decisions.get("ordering_agent", agent),
+                    "requested_exams": decisions.get("requested_exams", []),
+                    "review_loop": decisions.get("review_loop"),
                 },
             }
         ]
@@ -623,6 +668,21 @@ def _decision_events(result: Any) -> list[dict[str, Any]]:
                         "requires_follow_up_imaging",
                         False,
                     ),
+                },
+            }
+        ]
+    if agent == "ordering_clinician_review_agent":
+        return [
+            {
+                "event_type": "decision_made",
+                "agent": agent,
+                "decision": "ordering_clinician_review_completed",
+                "decision_scope": "review_loop",
+                "reason": "interpreted exam results returned to the clinician that ordered them",
+                "payload": {
+                    "ordering_agents": decisions.get("ordering_agents", []),
+                    "reviewed_findings": decisions.get("reviewed_findings", []),
+                    "review_status": decisions.get("review_status"),
                 },
             }
         ]
@@ -829,6 +889,7 @@ def _care_pathway(results: list) -> dict:
     lab = by_agent.get("lab_advisor_agent")
     lab_interpreter = by_agent.get("lab_result_interpreter_agent")
     imaging = by_agent.get("imaging_interpreter_agent")
+    review = by_agent.get("ordering_clinician_review_agent")
     pharmacy = by_agent.get("pharmacy_safety_agent")
     medication = by_agent.get("medication_plan_agent")
     emergency = by_agent.get("emergency_physician_agent")
@@ -855,9 +916,7 @@ def _care_pathway(results: list) -> dict:
             router.decisions.get("selected_specialties", []) if router else []
         ),
         "diagnostic_order_set": orders.decisions if orders else {},
-        "diagnostic_orders": (
-            lab.decisions.get("recommended_tests", []) if lab else []
-        ),
+        "diagnostic_orders": _ordered_exams_from_results(results),
         "lab_interpretation": (
             lab_interpreter.decisions.get("lab_interpretation", [])
             if lab_interpreter
@@ -866,6 +925,7 @@ def _care_pathway(results: list) -> dict:
         "imaging_interpretation": (
             imaging.decisions.get("imaging_interpretation", []) if imaging else []
         ),
+        "ordering_clinician_review": review.decisions if review else {},
         "medication_safety": pharmacy.recommendations if pharmacy else [],
         "medication_plan": medication.decisions if medication else {},
         "disposition": (
@@ -878,3 +938,13 @@ def _care_pathway(results: list) -> dict:
             disposition.decisions.get("monitoring_plan", []) if disposition else []
         ),
     }
+
+
+def _ordered_exams_from_results(results: list) -> list[str]:
+    exams: list[str] = []
+    for result in results:
+        for key in ("requested_exams", "ordered_exams"):
+            value = result.decisions.get(key)
+            if isinstance(value, list):
+                exams.extend(str(item) for item in value)
+    return list(dict.fromkeys(exams))

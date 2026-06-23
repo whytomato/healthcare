@@ -25,7 +25,7 @@
 
 ## 3. 整体微服务链路
 
-当前系统有四个 Spring Boot 微服务和一个 Python AI Worker。
+当前系统有核心 Spring Boot 微服务、ER 业务微服务和一个 Python AI Worker。
 
 ```text
 Frontend
@@ -37,6 +37,10 @@ Frontend
        -> Hospital Role Agents
        -> PatientHistoryLookupTool 调 clinical-record-service
        -> CareCoordinationTool 调 care-coordination-service
+       -> EmergencyEncounterTool 调 emergency-encounter-service
+       -> PractitionerAssignmentTool 调 practitioner-service
+       -> ResourceReservationTool 调 resource-service
+       -> ExamSchedulingTool 调 scheduling-service
   -> Kafka: ai.workflow.progress 实时进度
   -> Kafka: ai.symptom.result 最终结果
   -> encounter-service 更新任务状态
@@ -44,7 +48,7 @@ Frontend
   -> Frontend 展示 Timeline、Graph、Patient History、Final Report
 ```
 
-四个服务职责：
+核心服务职责：
 
 | 服务 | 端口 | 职责 |
 | --- | --- | --- |
@@ -53,9 +57,18 @@ Frontend
 | clinical-record-service | 8083 | 保存完整 workflow record，提供历史病历摘要 |
 | care-coordination-service | 8084 | 生成随访、转诊、住院/留观、人工审核等后续安排 |
 
+ER 最小演示服务：
+
+| 服务 | 端口 | 职责 |
+| --- | --- | --- |
+| emergency-encounter-service | 8088 | 打开急诊 encounter，记录资源 readiness 回写 |
+| practitioner-service | 8085 | 分配急诊医生、护士和专科医生 |
+| resource-service | 8086 | 预留抢救室、观察床、监护设备，暴露 constrained capacity |
+| scheduling-service | 8087 | 创建急诊/专科检查排程 |
+
 一句话解释：
 
-> encounter-service 管任务，triage-service 管事件转发，clinical-record-service 管病历持久化，care-coordination-service 管后续安排。真正的多 agent 医院 workflow 在 Python AI Worker 里执行。
+> encounter-service 管任务，triage-service 管事件转发，clinical-record-service 管病历持久化，care-coordination-service 管后续安排。ER 服务负责急诊 encounter、人员、资源和检查排程状态。真正的多 agent 医院 workflow 在 Python AI Worker 里执行，agent 通过 tool 主动调用这些服务。
 
 ## 4. Agent 角色与作用
 

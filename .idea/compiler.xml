@@ -6,11 +6,15 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="common-proto" />
         <module name="encounter-service" />
         <module name="care-coordination-service" />
+        <module name="practitioner-service" />
+        <module name="common-proto" />
+        <module name="resource-service" />
+        <module name="scheduling-service" />
         <module name="clinical-record-service" />
         <module name="triage-service" />
+        <module name="emergency-encounter-service" />
       </profile>
     </annotationProcessing>
   </component>

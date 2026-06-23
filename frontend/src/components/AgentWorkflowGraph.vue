@@ -247,43 +247,35 @@ const AGENTS: StaticAgent[] = [
     y: 450
   },
   {
-    id: "lab_advisor_agent",
-    label: "Lab Advisor",
-    group: "Diagnostics",
-    detail: "Aggregates consultation recommendations into diagnostic priorities.",
-    x: 1940,
-    y: 245
-  },
-  {
-    id: "diagnostic_order_agent",
-    label: "Diagnostic Orders",
-    group: "Diagnostics",
-    detail: "Creates lab and imaging orders according to urgency and specialties.",
-    x: 2220,
-    y: 245
-  },
-  {
     id: "lab_result_interpreter_agent",
     label: "Lab Interpreter",
     group: "Diagnostics",
-    detail: "Fetches and interprets lab result placeholders.",
-    x: 2500,
+    detail: "Interprets lab results requested by the ordering clinician.",
+    x: 1980,
     y: 120
   },
   {
     id: "imaging_interpreter_agent",
     label: "Imaging Interpreter",
     group: "Diagnostics",
-    detail: "Fetches and interprets imaging result placeholders.",
-    x: 2500,
+    detail: "Interprets imaging results requested by the ordering clinician.",
+    x: 1980,
     y: 370
+  },
+  {
+    id: "ordering_clinician_review_agent",
+    label: "Ordering Clinician Review",
+    group: "Diagnostics",
+    detail: "Returns interpreted lab and imaging findings to the clinician who ordered the exams.",
+    x: 2260,
+    y: 245
   },
   {
     id: "pharmacy_safety_agent",
     label: "Pharmacy Safety",
     group: "Medication",
     detail: "Checks allergy, medication history, and interaction safety.",
-    x: 2800,
+    x: 2540,
     y: 245
   },
   {
@@ -291,7 +283,7 @@ const AGENTS: StaticAgent[] = [
     label: "Medication Plan",
     group: "Medication",
     detail: "Creates medication plan and pharmacist review status.",
-    x: 3080,
+    x: 2820,
     y: 245
   },
   {
@@ -299,7 +291,7 @@ const AGENTS: StaticAgent[] = [
     label: "Care Plan",
     group: "Disposition",
     detail: "Outpatient care-plan branch for lower-risk encounters.",
-    x: 3360,
+    x: 3100,
     y: 95
   },
   {
@@ -307,7 +299,7 @@ const AGENTS: StaticAgent[] = [
     label: "Follow Up",
     group: "Disposition",
     detail: "Schedules follow-up and specialty referral actions when appropriate.",
-    x: 3640,
+    x: 3380,
     y: 95
   },
   {
@@ -315,7 +307,7 @@ const AGENTS: StaticAgent[] = [
     label: "Disposition",
     group: "Disposition",
     detail: "Chooses outpatient follow-up, emergency reassessment, or admission review.",
-    x: 3360,
+    x: 3100,
     y: 385
   },
   {
@@ -323,7 +315,7 @@ const AGENTS: StaticAgent[] = [
     label: "Admission",
     group: "Disposition",
     detail: "Checks bed availability and admission/observation pathway requirements.",
-    x: 3640,
+    x: 3380,
     y: 385
   },
   {
@@ -331,7 +323,7 @@ const AGENTS: StaticAgent[] = [
     label: "Final Report",
     group: "Report",
     detail: "Generates the final hospital workflow report with relevant context.",
-    x: 3920,
+    x: 3660,
     y: 245
   }
 ];
@@ -353,15 +345,19 @@ const WORKFLOW_EDGES: StaticWorkflowEdge[] = [
   { source: "specialist_router_agent", target: "cardiology_specialist_agent", label: "parallel", mode: "parallel" },
   { source: "specialist_router_agent", target: "infectious_disease_specialist_agent", label: "parallel", mode: "parallel" },
   { source: "specialist_router_agent", target: "neurology_specialist_agent", label: "parallel", mode: "parallel" },
-  { source: "respiratory_specialist_agent", target: "lab_advisor_agent", label: "consult", mode: "parallel" },
-  { source: "cardiology_specialist_agent", target: "lab_advisor_agent", label: "consult", mode: "parallel" },
-  { source: "infectious_disease_specialist_agent", target: "lab_advisor_agent", label: "consult", mode: "parallel" },
-  { source: "neurology_specialist_agent", target: "lab_advisor_agent", label: "consult", mode: "parallel" },
-  { source: "lab_advisor_agent", target: "diagnostic_order_agent", label: "orders", mode: "diagnostic" },
-  { source: "diagnostic_order_agent", target: "lab_result_interpreter_agent", label: "labs", mode: "diagnostic" },
-  { source: "diagnostic_order_agent", target: "imaging_interpreter_agent", label: "imaging", mode: "diagnostic" },
-  { source: "lab_result_interpreter_agent", target: "pharmacy_safety_agent", label: "results", mode: "diagnostic" },
-  { source: "imaging_interpreter_agent", target: "pharmacy_safety_agent", label: "results", mode: "diagnostic" },
+  { source: "emergency_physician_agent", target: "lab_result_interpreter_agent", label: "stat labs", mode: "diagnostic" },
+  { source: "emergency_physician_agent", target: "imaging_interpreter_agent", label: "stat imaging", mode: "diagnostic" },
+  { source: "respiratory_specialist_agent", target: "lab_result_interpreter_agent", label: "labs", mode: "parallel" },
+  { source: "respiratory_specialist_agent", target: "imaging_interpreter_agent", label: "imaging", mode: "parallel" },
+  { source: "cardiology_specialist_agent", target: "lab_result_interpreter_agent", label: "labs", mode: "parallel" },
+  { source: "cardiology_specialist_agent", target: "imaging_interpreter_agent", label: "imaging", mode: "parallel" },
+  { source: "infectious_disease_specialist_agent", target: "lab_result_interpreter_agent", label: "labs", mode: "parallel" },
+  { source: "infectious_disease_specialist_agent", target: "imaging_interpreter_agent", label: "imaging", mode: "parallel" },
+  { source: "neurology_specialist_agent", target: "lab_result_interpreter_agent", label: "labs", mode: "parallel" },
+  { source: "neurology_specialist_agent", target: "imaging_interpreter_agent", label: "imaging", mode: "parallel" },
+  { source: "lab_result_interpreter_agent", target: "ordering_clinician_review_agent", label: "lab results", mode: "diagnostic" },
+  { source: "imaging_interpreter_agent", target: "ordering_clinician_review_agent", label: "imaging results", mode: "diagnostic" },
+  { source: "ordering_clinician_review_agent", target: "pharmacy_safety_agent", label: "reviewed plan", mode: "diagnostic" },
   { source: "pharmacy_safety_agent", target: "medication_plan_agent", label: "safety", mode: "handoff" },
   { source: "medication_plan_agent", target: "care_plan_agent", label: "outpatient", mode: "disposition" },
   { source: "medication_plan_agent", target: "disposition_coordinator_agent", label: "urgent", mode: "disposition" },
@@ -374,8 +370,15 @@ const WORKFLOW_EDGES: StaticWorkflowEdge[] = [
 const TOOLS: StaticTool[] = [
   { agent: "registration_agent", tool: "patient_history_lookup", label: "History Lookup" },
   { agent: "triage_nurse_agent", tool: "guideline_lookup", label: "Guideline Lookup" },
-  { agent: "diagnostic_order_agent", tool: "lab_order", label: "Lab Order" },
-  { agent: "diagnostic_order_agent", tool: "imaging_order", label: "Imaging Order" },
+  { agent: "emergency_physician_agent", tool: "emergency_encounter", label: "Emergency Encounter" },
+  { agent: "emergency_physician_agent", tool: "practitioner_assignment", label: "Practitioner Assignment" },
+  { agent: "emergency_physician_agent", tool: "resource_reservation", label: "Resource Reservation" },
+  { agent: "emergency_physician_agent", tool: "emergency_readiness_update", label: "Readiness Update" },
+  { agent: "emergency_physician_agent", tool: "exam_scheduling", label: "Exam Scheduling" },
+  { agent: "respiratory_specialist_agent", tool: "exam_scheduling", label: "Exam Scheduling" },
+  { agent: "cardiology_specialist_agent", tool: "exam_scheduling", label: "Exam Scheduling" },
+  { agent: "infectious_disease_specialist_agent", tool: "exam_scheduling", label: "Exam Scheduling" },
+  { agent: "neurology_specialist_agent", tool: "exam_scheduling", label: "Exam Scheduling" },
   { agent: "lab_result_interpreter_agent", tool: "lab_result_fetch", label: "Lab Result Fetch" },
   { agent: "imaging_interpreter_agent", tool: "imaging_result_fetch", label: "Imaging Result Fetch" },
   { agent: "pharmacy_safety_agent", tool: "patient_history_lookup", label: "History Lookup" },

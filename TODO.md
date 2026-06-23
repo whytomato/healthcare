@@ -1,5 +1,18 @@
 # TODO
 
+## 2026-06-23 completed in current pass
+
+- [x] Paused `LabAdvisorAgent` and `DiagnosticOrderAgent` in the current default workflow without deleting their implementations.
+- [x] Added the ordering-clinician review loop: ordering clinician or specialist schedules exams, lab/imaging interpreters process results, and `OrderingClinicianReviewAgent` reviews findings before pharmacy safety.
+- [x] Added a frontend `Emergency Surge Scenario` panel that submits multiple real ER encounters concurrently and displays `resource_reservation` readiness from final clinical records.
+- [x] Split frontend demo cases, shared types, encounter sidebar, and surge panel out of `App.vue`.
+- [x] Updated workflow graph static coverage to show the current exam-review loop instead of the old lab-advisor/diagnostic-order path.
+- [x] Added `docs/CURRENT_DEMO_GUIDE.md` for the current meeting/demo explanation.
+- [x] Persisted ER resource inventory and reservations in Postgres-backed `resource-service`, with transactional reservation and release by `taskId`.
+- [x] Persisted ER practitioner pool and assignments in Postgres-backed `practitioner-service`, with active assignment counts and release by `taskId`.
+- [x] Added Python Kafka worker `--concurrency` support for concurrent ER surge task processing.
+- [x] Extended frontend ER surge cards to show both resource readiness and practitioner staffing status.
+
 本文档记录当前已经明确的下一步。当前目标是先完成一个可展示的 healthcare 多 agent + 微服务系统，再逐步增加业务复杂性和后续测试建模入口。
 
 ## 后续重构约束
@@ -7,6 +20,10 @@
 - [ ] 将完整业务流程中的服务整理为边界清晰、职责单一、数据所有权明确、接口契约明确的微服务架构。
 - [ ] 后续允许调整 Agent Workflow，并允许现有 Agent 退出新流程，但不得删除任何已有 Agent 实现。
 - [ ] 本次微服务设计围绕以下六个服务展开：`patient-service`、`clinical-record-service`、`practitioner-service`、`resource-service`、`scheduling-service`、`emergency-encounter-service`。
+- [x] 急诊最小演示先落地 `emergency-encounter-service`、`practitioner-service`、`resource-service`、`scheduling-service` 四个业务微服务骨架。
+- [x] 高风险急诊 workflow 前置打开急诊 encounter，调用人员分配、资源预留、readiness 回写和急诊检查排程 tool，并把结果写入 `handoff_timeline`。
+- [x] `resource-service` 增加最小 constrained capacity 语义，为后续多并发测试暴露 partial / unavailable readiness。
+- [x] 分科专家可以作为开单 agent 调用检查排程；检查结果后续应回到开单 agent 复看。
 - [ ] `triage-service` 属于已有能力，本次不讨论其内部重新设计；后续只定义它与上述服务的集成契约。
 - [ ] 严格区分 Business Microservice 与 Agent Tool：微服务拥有权威业务状态和独立生命周期，Tool 只负责查询或命令服务及本地能力。
 
@@ -31,9 +48,9 @@
 ### P1：微服务架构优化
 
 - [x] 明确 `encounter-service` 与 `clinical-record-service` 的职责边界：`encounter-service` 负责 Patient Encounter、task status、realtime progress；`clinical-record-service` 负责 Workflow Record 和 Longitudinal Patient Record，避免两个服务长期重复保存完整 workflow result。
-- [ ] 整理四个服务的启动和健康检查体验：`encounter-service`、`triage-service`、`clinical-record-service`、`care-coordination-service` 都应有清晰端口、health endpoint、README 启动命令和手动验证命令。
+- [x] 整理核心服务和 ER 服务的启动和健康检查体验：`encounter-service`、`triage-service`、`clinical-record-service`、`care-coordination-service`、`emergency-encounter-service`、`practitioner-service`、`resource-service`、`scheduling-service` 都应有清晰端口、health endpoint、README 启动命令和手动验证命令。
 - [ ] 补齐微服务契约文档：列出 REST API、Kafka topic、输入/输出消息字段、持久化表职责，作为后续扩展服务的边界说明。
-- [ ] 增加演示稳定性脚本：优先做 `scripts/start-all` / `scripts/stop-all` 或 Windows PowerShell 版本，减少手动启动四个服务和 worker 的成本。
+- [x] 增加演示稳定性脚本：已提供 `scripts/start-healthcare-services.ps1` / `scripts/stop-healthcare-services.ps1`，减少手动启动多个 Spring Boot 服务的成本。
 - [ ] 微服务事件暂不进入前端 `Agent Workflow Graph`；Graph 聚焦 agent workflow 和 tool 调用，微服务优化先服务于后端架构清晰和运行稳定。
 
 ### P0：Agent Workflow 自主决策
@@ -65,7 +82,7 @@
 - [x] 将 Python workflow 的 disposition/admission/follow-up 结果接入 `care-coordination-service`，让后续安排从独立微服务生成。
 - [ ] 明确是否保留 `encounter-service` 对 `ai.symptom.result` 的消费。如果 `clinical-record-service` 负责结果保存，`encounter-service` 可以只维护 task 状态。
 - [ ] 为各服务整理端口、topic、REST API 表，写入 README。
-- [ ] 增加 `scripts/start-all`、`scripts/stop-all`、`scripts/demo-healthcare-flow`，对齐 eCommerce 的演示体验。
+- [x] 增加 Spring Boot 服务启动/停止脚本和 `scripts/demo_healthcare_flow.py`，对齐 eCommerce 的演示体验。
 
 ## P1：完善 Agent Workflow
 

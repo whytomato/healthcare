@@ -78,7 +78,7 @@ class LabResultInterpreterAgent(HospitalAgent):
                 "requires_repeat_labs": infection_risk and cardiac_risk,
             },
             data={"tool_results": [lab_results]},
-            handoff_to=["pharmacy_safety_agent"],
+            handoff_to=["ordering_clinician_review_agent"],
             confidence=0.74,
         )
 
@@ -113,14 +113,66 @@ class ImagingInterpreterAgent(HospitalAgent):
                 "requires_follow_up_imaging": len(interpretations) > 1,
             },
             data={"tool_results": [imaging_results]},
-            handoff_to=["pharmacy_safety_agent"],
+            handoff_to=["ordering_clinician_review_agent"],
             confidence=0.72,
         )
 
 
+class OrderingClinicianReviewAgent(HospitalAgent):
+    name = "ordering_clinician_review_agent"
+    role = "ordering_clinician_review"
+
+    def run(
+        self,
+        context: HospitalContext,
+        previous: list[HospitalAgentResult],
+    ) -> HospitalAgentResult:
+        ordering_agents = [
+            result.agent
+            for result in previous
+            if result.decisions.get("review_loop") == "ordering_clinician_review_required"
+            and result.decisions.get("requested_exams")
+        ]
+        lab = self.previous_result(previous, "lab_result_interpreter_agent")
+        imaging = self.previous_result(previous, "imaging_interpreter_agent")
+        reviewed_findings = []
+        if lab:
+            reviewed_findings.extend(lab.findings)
+        if imaging:
+            reviewed_findings.extend(imaging.findings)
+        if not reviewed_findings:
+            reviewed_findings.append("exam_results_reviewed_without_new_demo_flags")
+
+        return self.ready(
+            summary="Ordering clinicians reviewed exam results before medication and disposition planning.",
+            findings=reviewed_findings,
+            recommendations=[
+                "Return interpreted results to the clinician that ordered the exams.",
+                "Use reviewed findings before medication safety and disposition decisions.",
+            ],
+            decisions={
+                "ordering_agents": ordering_agents,
+                "reviewed_findings": reviewed_findings,
+                "review_status": "completed",
+            },
+            handoff_to=["pharmacy_safety_agent"],
+            confidence=0.78,
+        )
+
+
 def _orders(previous: list[HospitalAgentResult]) -> list[str]:
-    order_agent = next(
+    diagnostic_order_agent = next(
         (result for result in previous if result.agent == "diagnostic_order_agent"),
         None,
     )
-    return list(order_agent.decisions.get("orders", [])) if order_agent else []
+    if diagnostic_order_agent:
+        return list(diagnostic_order_agent.decisions.get("orders", []))
+    orders: list[str] = []
+    for result in previous:
+        requested = result.decisions.get("requested_exams")
+        if isinstance(requested, list):
+            orders.extend(str(order) for order in requested)
+        emergency_orders = result.decisions.get("ordered_exams")
+        if isinstance(emergency_orders, list):
+            orders.extend(str(order) for order in emergency_orders)
+    return list(dict.fromkeys(orders))

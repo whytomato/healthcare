@@ -55,6 +55,18 @@ def test_readme_documents_care_coordination_service_api() -> None:
     assert "GET  http://localhost:8084/health" in readme
 
 
+def test_readme_documents_service_lifecycle_scripts_for_manual_testing() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "scripts\\start-healthcare-services.ps1" in readme
+    assert "scripts\\stop-healthcare-services.ps1" in readme
+    assert "-CoreOnly" in readme
+    assert "-Verify" in readme
+    assert "verify-healthcare-services.ps1 -CoreOnly" in readme
+    assert "outputs\\service-logs" in readme
+    assert "outputs\\healthcare-services.pids.json" in readme
+
+
 def test_readme_documents_encounter_and_record_service_boundaries() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 

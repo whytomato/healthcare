@@ -3,6 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from app.tools.care_coordination import CareCoordinationTool
+from app.tools.emergency_operations import (
+    EmergencyEncounterTool,
+    ExamSchedulingTool,
+    PractitionerAssignmentTool,
+    ResourceReservationTool,
+)
 
 
 def ready_tool_result(
@@ -249,3 +255,7 @@ class ClinicalToolRegistry:
         self.follow_up_scheduling = FollowUpSchedulingTool()
         self.human_review_request = HumanReviewRequestTool()
         self.care_coordination = CareCoordinationTool()
+        self.emergency_encounter = EmergencyEncounterTool()
+        self.practitioner_assignment = PractitionerAssignmentTool()
+        self.resource_reservation = ResourceReservationTool()
+        self.exam_scheduling = ExamSchedulingTool()
