@@ -3,7 +3,6 @@ package com.example.healthcare.practitioner.service
 import com.example.healthcare.practitioner.model.PractitionerAssignment
 import com.example.healthcare.practitioner.model.PractitionerAssignmentEntity
 import com.example.healthcare.practitioner.model.PractitionerAssignmentRequest
-import com.example.healthcare.practitioner.model.PractitionerEntity
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.stereotype.Service
@@ -15,18 +14,8 @@ class PractitionerAssignmentService(
     private val assignmentRepository: PractitionerAssignmentRepository,
     private val objectMapper: ObjectMapper,
 ) {
-    private val defaultPractitioners = listOf(
-        PractitionerEntity("er-physician-1", "Emergency physician 1", "emergency_physician", true, 0, 1),
-        PractitionerEntity("charge-nurse-1", "Charge nurse 1", "charge_nurse", true, 0, 2),
-        PractitionerEntity("respiratory-consultant-1", "Respiratory consultant 1", "respiratory", true, 0, 1),
-        PractitionerEntity("cardiology-consultant-1", "Cardiology consultant 1", "cardiology", true, 0, 1),
-        PractitionerEntity("infectious-consultant-1", "Infectious disease consultant 1", "infectious_disease", true, 0, 1),
-        PractitionerEntity("neurology-consultant-1", "Neurology consultant 1", "neurology", true, 0, 1),
-    )
-
     @Transactional
     fun assign(request: PractitionerAssignmentRequest): PractitionerAssignment {
-        seedDefaultPractitioners()
         val requiredSpecialties = buildList {
             add("emergency_physician")
             if (request.urgencyLevel == "high") {
@@ -89,23 +78,6 @@ class PractitionerAssignmentService(
                 releasedCount += 1
             }
         return releasedCount
-    }
-
-    private fun seedDefaultPractitioners() {
-        defaultPractitioners.forEach { practitioner ->
-            if (!practitionerRepository.existsById(practitioner.practitionerId)) {
-                practitionerRepository.save(
-                    PractitionerEntity(
-                        practitionerId = practitioner.practitionerId,
-                        displayName = practitioner.displayName,
-                        specialty = practitioner.specialty,
-                        onShift = practitioner.onShift,
-                        activeAssignments = practitioner.activeAssignments,
-                        maxConcurrentAssignments = practitioner.maxConcurrentAssignments,
-                    )
-                )
-            }
-        }
     }
 
     private fun decodeList(value: String): List<String> =

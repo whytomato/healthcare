@@ -4,3 +4,10 @@ server:
 spring:
   application:
     name: resource-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/healthcare
+    username: user
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update

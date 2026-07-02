@@ -83,6 +83,41 @@ def test_frontend_exposes_emergency_surge_panel_for_concurrent_er_demo() -> None
     assert "emergency_surge_template" in demo_cases
 
 
+def test_frontend_surge_panel_summarizes_resource_and_staff_contention() -> None:
+    surge_panel = Path("frontend/src/components/EmergencySurgePanel.vue").read_text(encoding="utf-8")
+    styles = Path("frontend/src/styles.css").read_text(encoding="utf-8")
+
+    assert "Surge Run Summary" in surge_panel
+    assert "Resource limited" in surge_panel
+    assert "Staff limited" in surge_panel
+    assert "Completed" in surge_panel
+    assert "surgeSummary" in surge_panel
+    assert "resourceLimited" in surge_panel
+    assert "staffLimited" in surge_panel
+    assert "resource-status-grid" in surge_panel
+    assert "status-chip" in surge_panel
+    assert "statusTone(result.readiness?.readinessStatus" in surge_panel
+    assert "statusTone(result.practitionerAssignment?.assignmentStatus" in surge_panel
+    assert ".surge-summary" in styles
+    assert ".resource-status-grid" in styles
+    assert ".status-chip" in styles
+
+
+def test_frontend_surge_polling_retries_clinical_record_until_tool_payloads_exist() -> None:
+    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
+    polling = Path("frontend/src/surgeRecordPolling.ts").read_text(encoding="utf-8")
+
+    assert 'import { loadSurgeClinicalRecordWithTools } from "./surgeRecordPolling"' in app
+    assert "loadSurgeClinicalRecordWithTools" in app
+    assert "hasSurgeToolPayloads(record)" in polling
+    assert "for (let attempt = 0; attempt < 10; attempt += 1)" in polling
+    assert "await wait(900)" in polling
+    assert "resource_reservation" in polling
+    assert "practitioner_assignment" in polling
+    assert "extractSurgeReadiness(record)" in app
+    assert "extractSurgePractitionerAssignment(record)" in app
+
+
 def test_frontend_app_shell_uses_smaller_componentized_entrypoint() -> None:
     app_path = Path("frontend/src/App.vue")
     app = app_path.read_text(encoding="utf-8")

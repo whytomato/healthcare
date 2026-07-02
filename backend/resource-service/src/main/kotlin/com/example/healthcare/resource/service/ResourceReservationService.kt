@@ -1,6 +1,5 @@
 package com.example.healthcare.resource.service
 
-import com.example.healthcare.resource.model.EmergencyResourceEntity
 import com.example.healthcare.resource.model.ResourceReservation
 import com.example.healthcare.resource.model.ResourceReservationEntity
 import com.example.healthcare.resource.model.ResourceReservationRequest
@@ -15,18 +14,8 @@ class ResourceReservationService(
     private val reservationRepository: ResourceReservationRepository,
     private val objectMapper: ObjectMapper,
 ) {
-    private val defaultCapacities = mapOf(
-        "resuscitation_room" to 1,
-        "emergency_observation_bed" to 2,
-        "portable_monitor" to 4,
-        "cardiac_monitor" to 2,
-        "neuro_observation_capacity" to 1,
-        "exam_room" to 3,
-    )
-
     @Transactional
     fun reserve(request: ResourceReservationRequest): ResourceReservation {
-        seedDefaultInventory()
         val required = request.requiredResources.ifEmpty {
             if (request.urgencyLevel == "high") {
                 listOf("resuscitation_room", "emergency_observation_bed", "portable_monitor")
@@ -90,21 +79,6 @@ class ResourceReservationService(
                 releasedCount += 1
             }
         return releasedCount
-    }
-
-    private fun seedDefaultInventory() {
-        defaultCapacities.forEach { (resourceType, capacity) ->
-            if (!resourceRepository.existsById(resourceType)) {
-                resourceRepository.save(
-                    EmergencyResourceEntity(
-                        resourceType = resourceType,
-                        displayName = resourceType.replace("_", " "),
-                        totalUnits = capacity,
-                        availableUnits = capacity,
-                    )
-                )
-            }
-        }
     }
 
     private fun decodeList(value: String): List<String> =

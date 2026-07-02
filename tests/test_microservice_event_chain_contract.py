@@ -118,6 +118,10 @@ def test_python_worker_preserves_triage_metadata_in_workflow_result(monkeypatch)
     assert result.result is not None
     assert result.result["input_metadata"]["source"] == "triage-service"
     assert result.result["input_metadata"]["triageUrgencyLevel"] == "standard"
+    assert FakeHospitalOrchestrator.last_metadata is not None
+    assert FakeHospitalOrchestrator.last_metadata["taskId"] == "t001"
+    assert FakeHospitalOrchestrator.last_metadata["task_id"] == "t001"
+    assert FakeHospitalOrchestrator.last_metadata["source"] == "triage-service"
 
 
 def test_python_worker_leaves_patient_history_lookup_to_hospital_agents(monkeypatch) -> None:
@@ -141,7 +145,8 @@ def test_python_worker_leaves_patient_history_lookup_to_hospital_agents(monkeypa
     assert result.status == "ready"
     assert result.result is not None
     assert "patient_history" not in result.result
-    assert FakeHospitalOrchestrator.last_metadata in (None, {})
+    assert FakeHospitalOrchestrator.last_metadata is not None
+    assert FakeHospitalOrchestrator.last_metadata["taskId"] == "t-history"
 
 
 def test_python_worker_can_emit_realtime_agent_progress(monkeypatch) -> None:

@@ -73,12 +73,18 @@ def process_task(
             progress_publisher(to_backend_progress_payload(task.task_id, event))
 
     try:
+        workflow_metadata = {
+            **task.metadata,
+            "taskId": task.task_id,
+            "task_id": task.task_id,
+        }
         result = HospitalOrchestrator().run(
             case_text=task.case_text,
             patient_id=task.patient_id,
             doctor_id=task.doctor_id,
             language=task.language,
             progress_publisher=publish_progress if progress_publisher is not None else None,
+            metadata=workflow_metadata,
         )
         result["input_metadata"] = task.metadata
         final_status = (

@@ -104,6 +104,7 @@ import HospitalJourneyOverview from "./components/HospitalJourneyOverview.vue";
 import WorkflowDisplayPanel from "./components/WorkflowDisplayPanel.vue";
 import { demoCases, emergencySurgeTemplate } from "./demoCases";
 import { normalizeReportMarkdownText } from "./reportFormatting";
+import { loadSurgeClinicalRecordWithTools } from "./surgeRecordPolling";
 import {
   extractSurgePractitionerAssignment,
   extractSurgeReadiness
@@ -505,7 +506,11 @@ async function pollSurgeTask(task: AiTask) {
     });
     if (terminalStatuses.has(latest.status)) {
       try {
-        const record = await requestJson<ClinicalRecord>(`/api/records/${task.taskId}`);
+        const record = await loadSurgeClinicalRecordWithTools(
+          task.taskId,
+          (taskId) => requestJson<ClinicalRecord>(`/api/records/${taskId}`),
+          delay
+        );
         updateSurgeResult(task.taskId, {
           status: latest.status === "COMPLETED" ? "completed" : "failed",
           readiness: extractSurgeReadiness(record),

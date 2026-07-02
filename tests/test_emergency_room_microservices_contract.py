@@ -84,6 +84,8 @@ def test_practitioner_service_persists_staff_pool_and_assignments_for_er_surge()
     assignment_entity = (base / "model/PractitionerAssignmentEntity.kt").read_text(encoding="utf-8")
     practitioner_repository = (base / "service/PractitionerRepository.kt").read_text(encoding="utf-8")
     assignment_repository = (base / "service/PractitionerAssignmentRepository.kt").read_text(encoding="utf-8")
+    initializer_path = base / "service/PractitionerSeedInitializer.kt"
+    initializer = initializer_path.read_text(encoding="utf-8")
 
     assert "spring-boot-starter-data-jpa" in pom
     assert "postgresql" in pom
@@ -103,6 +105,10 @@ def test_practitioner_service_persists_staff_pool_and_assignments_for_er_surge()
     assert "findBySpecialtyAndOnShiftTrue" in practitioner_repository
     assert "JpaRepository" in assignment_repository
     assert "@Transactional" in service
+    assert "seedDefaultPractitioners" not in service
+    assert initializer_path.is_file()
+    assert "ApplicationRunner" in initializer
+    assert "practitionerRepository.save" in initializer
     assert "assignmentRepository.save" in service
     assert "activeAssignments" in service
     assert '@PostMapping("/api/practitioners/emergency-assignments/{taskId}/release")' in (
@@ -138,6 +144,8 @@ def test_resource_service_persists_inventory_and_reservations_for_concurrent_er_
     reservation_entity = (base / "model/ResourceReservationEntity.kt").read_text(encoding="utf-8")
     resource_repository = (base / "service/EmergencyResourceRepository.kt").read_text(encoding="utf-8")
     reservation_repository = (base / "service/ResourceReservationRepository.kt").read_text(encoding="utf-8")
+    initializer_path = base / "service/EmergencyResourceSeedInitializer.kt"
+    initializer = initializer_path.read_text(encoding="utf-8")
 
     assert "spring-boot-starter-data-jpa" in pom
     assert "postgresql" in pom
@@ -156,6 +164,10 @@ def test_resource_service_persists_inventory_and_reservations_for_concurrent_er_
     assert "LockModeType.PESSIMISTIC_WRITE" in resource_repository
     assert "JpaRepository" in reservation_repository
     assert "@Transactional" in service
+    assert "seedDefaultInventory" not in service
+    assert initializer_path.is_file()
+    assert "ApplicationRunner" in initializer
+    assert "resourceRepository.save" in initializer
     assert "reservationRepository.save" in service
     assert "ConcurrentHashMap" not in service
     assert '@PostMapping("/api/resources/emergency-reservations/{taskId}/release")' in (

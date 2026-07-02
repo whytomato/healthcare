@@ -5,8 +5,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.error import HTTPError
 
 import app.tools.care_coordination as care_coordination_module
+import app.tools.emergency_operations as emergency_operations_module
 import app.tools.patient_history_lookup as patient_history_module
 from app.llm_client import LlmResult
 from app.tools import AIConsultationTool, ClinicalToolRegistry
@@ -870,6 +872,91 @@ def test_optional_external_tools_use_short_demo_timeouts(monkeypatch) -> None:
     assert care["status"] == "unavailable"
     assert patient_history_timeouts == [0.5]
     assert care_coordination_timeouts == [0.5]
+
+
+def test_emergency_operation_tools_allow_service_response_time_under_surge(monkeypatch) -> None:
+    captured_timeouts: list[float] = []
+
+    def service_response(request, timeout):
+        captured_timeouts.append(timeout)
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    {
+                        "taskId": "er-timeout-task",
+                        "patientId": "p-timeout",
+                        "readinessStatus": "ready",
+                        "reservedResources": ["resuscitation_room"],
+                        "unavailableResources": [],
+                    }
+                ).encode("utf-8")
+
+        return Response()
+
+    monkeypatch.delenv("EMERGENCY_SERVICE_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setattr(emergency_operations_module, "urlopen", service_response)
+
+    result = emergency_operations_module.ResourceReservationTool().run(
+        task_id="er-timeout-task",
+        patient_id="p-timeout",
+        urgency_level="high",
+        required_resources=["resuscitation_room"],
+    )
+
+    assert result["status"] == "ready"
+    assert result["payload"]["readinessStatus"] == "ready"
+    assert captured_timeouts == [2.0]
+
+
+def test_emergency_operation_tools_retry_transient_service_errors_before_fallback(monkeypatch) -> None:
+    attempts = 0
+
+    def transient_service_response(request, timeout):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise HTTPError(request.full_url, 500, "temporary lock conflict", {}, None)
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    {
+                        "taskId": "er-retry-task",
+                        "patientId": "p-retry",
+                        "assignmentStatus": "assigned",
+                        "assignedPractitioners": ["er-physician-1", "charge-nurse-1"],
+                        "unavailableSpecialties": [],
+                    }
+                ).encode("utf-8")
+
+        return Response()
+
+    monkeypatch.setattr(emergency_operations_module, "urlopen", transient_service_response)
+    monkeypatch.setattr(emergency_operations_module, "sleep", lambda seconds: None, raising=False)
+
+    result = emergency_operations_module.PractitionerAssignmentTool().run(
+        task_id="er-retry-task",
+        patient_id="p-retry",
+        urgency_level="high",
+        required_specialties=[],
+    )
+
+    assert result["status"] == "ready"
+    assert result["payload"]["assignmentStatus"] == "assigned"
+    assert attempts == 3
 
 
 def test_hospital_orchestrator_runs_selected_specialist_consultations_in_parallel() -> None:

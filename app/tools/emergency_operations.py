@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+from time import sleep
 from typing import Any
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -11,7 +12,9 @@ DEFAULT_PRACTITIONER_BASE_URL = "http://localhost:8085"
 DEFAULT_RESOURCE_BASE_URL = "http://localhost:8086"
 DEFAULT_SCHEDULING_BASE_URL = "http://localhost:8087"
 DEFAULT_EMERGENCY_ENCOUNTER_BASE_URL = "http://localhost:8088"
-DEFAULT_EMERGENCY_SERVICE_TIMEOUT_SECONDS = 0.5
+DEFAULT_EMERGENCY_SERVICE_TIMEOUT_SECONDS = 2.0
+DEFAULT_EMERGENCY_SERVICE_RETRIES = 2
+DEFAULT_EMERGENCY_SERVICE_RETRY_DELAY_SECONDS = 0.2
 
 
 class EmergencyEncounterTool:
@@ -282,22 +285,36 @@ def _post_json_tool_result(
         },
         method="POST",
     )
-    try:
-        with urlopen(request, timeout=timeout_seconds) as response:
-            service_payload = json.loads(response.read().decode("utf-8"))
-        return {
-            "tool": tool,
-            "status": "ready",
-            "summary": ready_summary,
-            "payload": service_payload,
-        }
-    except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
-        return {
-            "tool": tool,
-            "status": "unavailable",
-            "summary": unavailable_summary,
-            "payload": {**fallback_payload, "message": str(exc)},
-        }
+    last_error: Exception | None = None
+    for attempt in range(DEFAULT_EMERGENCY_SERVICE_RETRIES + 1):
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                service_payload = json.loads(response.read().decode("utf-8"))
+            return {
+                "tool": tool,
+                "status": "ready",
+                "summary": ready_summary,
+                "payload": service_payload,
+            }
+        except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+            last_error = exc
+            if not _should_retry(exc, attempt):
+                break
+            sleep(DEFAULT_EMERGENCY_SERVICE_RETRY_DELAY_SECONDS)
+    return {
+        "tool": tool,
+        "status": "unavailable",
+        "summary": unavailable_summary,
+        "payload": {**fallback_payload, "message": str(last_error)},
+    }
+
+
+def _should_retry(exc: Exception, attempt: int) -> bool:
+    if attempt >= DEFAULT_EMERGENCY_SERVICE_RETRIES:
+        return False
+    if isinstance(exc, HTTPError):
+        return 500 <= exc.code < 600
+    return isinstance(exc, (TimeoutError, URLError))
 
 
 def _env_timeout(name: str, default: float) -> float:

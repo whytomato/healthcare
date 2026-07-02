@@ -1,5 +1,82 @@
 # TODO
 
+## 2026-06-24 completed in current pass
+
+- [x] Optimized the `Emergency Surge Scenario` frontend panel into a clearer surge dashboard: run summary, completed count, resource-limited count, staff-limited count, failed count, and per-patient resource/staff status chips.
+- [x] Added a frontend contract test that protects the surge panel's resource and practitioner contention display.
+
+## 2026-06-25 TODO
+
+### Tomorrow exit criteria
+
+- [ ] A manual demo can be completed from Vue without explaining around broken state: standard outpatient, emergency case, and `Emergency Surge Scenario`.
+- [ ] The ER path clearly demonstrates `Emergency Room Minimal Demonstrator`: high-acuity Patient Encounter -> Emergency Resource Readiness -> Initial Consultation - Exam - Review Loop -> disposition/final report.
+- [ ] The audience can tell the difference between Hospital Role Agent, Agent Tool, and Business Microservice from the frontend graph plus one contract table.
+- [ ] Repeated surge tests have a documented reset/release path, so resource and practitioner capacity does not silently pollute the next run.
+
+### P0: Manual demo stability
+
+- [ ] In IDEA, run Maven compile for the full backend multi-module project, especially the new Postgres/JPA `practitioner-service` and `resource-service`.
+  - Acceptance: every Spring Boot module imports and compiles; no unresolved JPA/Jackson/Kotlin errors.
+- [ ] Manually start all services with `scripts/start-healthcare-services.ps1 -Verify`.
+  - Acceptance: encounter 8081, triage 8082, clinical-record 8083, care-coordination 8084, practitioner 8085, resource 8086, scheduling 8087, emergency-encounter 8088 all pass health checks.
+- [ ] Start Python worker with `--concurrency 4` and keep one terminal visible for progress/error logs.
+  - Acceptance: multiple Kafka tasks can be processed concurrently; no task remains stuck at `PUBLISHED` for the normal demo cases.
+- [ ] From Vue, run one standard outpatient Patient Encounter.
+  - Acceptance: Graph does not show emergency-only agents/tools as actual path; final report renders Markdown; Patient History panel remains readable.
+- [ ] From Vue, run one high-acuity emergency Patient Encounter.
+  - Acceptance: Graph shows `EmergencyPhysicianAgent`, `practitioner_assignment`, `resource_reservation`, `emergency_readiness_update`, `exam_scheduling`, interpreter agents, and `OrderingClinicianReviewAgent`.
+- [ ] Run an `Emergency Surge Scenario` with 5 patients.
+  - Acceptance: surge panel shows completed count, resource-limited count, staff-limited count, and each completed patient can be opened in Graph.
+- [ ] Test repeated surge runs by releasing completed task reservations or resetting Docker volumes, then rerun one surge.
+  - Acceptance: after release/reset, capacity returns and the next surge does not start from stale exhausted state.
+
+### P0: Emergency workflow depth
+
+- [ ] Make the ER minimal chain more explainable: emergency encounter opened -> practitioner assignment -> resource reservation -> readiness update -> stat exam scheduling -> result interpretation -> ordering clinician review.
+  - Acceptance: `handoff_timeline` has readable tool events for every arrow in that chain.
+- [ ] Add clearer Role-Scoped Agent Decision reasons around why the emergency physician requests staff, resources, and exams before downstream review.
+  - Acceptance: timeline/Graph inspector can show a human-readable reason, not only raw payload fields.
+- [ ] Make `OrderingClinicianReviewAgent` explain that results returned to the ordering clinician before medication/disposition.
+  - Acceptance: final Timeline and Graph make the Initial Consultation - Exam - Review Loop obvious without needing source-code explanation.
+- [ ] Confirm `LabAdvisorAgent` and `DiagnosticOrderAgent` stay paused in the current default path while their code remains available for alternate workflows.
+  - Acceptance: tests verify current default path excludes them, but imports/registry still keep the implementations available.
+- [ ] Add one demo case specifically for "ER resource contention but workflow still completes with partial readiness".
+  - Acceptance: user can select it or trigger it through surge; final report and tool payload mention partial readiness.
+
+### P1: Microservice architecture
+
+- [ ] Write a microservice contract table covering service name, port, REST APIs, Kafka topics, database tables, and authoritative state ownership.
+  - Acceptance: docs distinguish Business Microservice from Agent Tool using glossary terms, not implementation shorthand.
+- [ ] Decide whether task result consumption should remain in both `encounter-service` and `clinical-record-service`, or whether `encounter-service` should only maintain Task Status.
+  - Recommended answer: `encounter-service` should consume `ai.symptom.result` only to update Task Status/error; `clinical-record-service` owns the Workflow Record.
+- [ ] Add or document a clean demo reset path for ER capacity state so manual concurrent tests are repeatable.
+  - Acceptance: either one script releases task reservations by `taskId`, or docs provide the exact Docker volume reset command.
+- [ ] Add contract coverage for practitioner/resource release endpoints.
+  - Acceptance: tests protect `POST /api/practitioners/emergency-assignments/{taskId}/release` and `POST /api/resources/emergency-reservations/{taskId}/release`.
+- [ ] Review whether `scheduling-service` should remain in-memory for now or become Postgres-backed like practitioner/resource services.
+  - Recommended answer: keep it in-memory for tomorrow unless surge demos need exam-slot contention; document it as a known simplification.
+
+### P1: Frontend workflow presentation
+
+- [ ] Improve the Graph inspector so selected agent/tool nodes show richer clinical meaning, not only raw event text.
+  - Acceptance: selecting a tool node shows tool status, reason, selected/skipped/unavailable, and key payload fields such as readiness/staffing.
+- [ ] Add a concise "what happened in this encounter" summary above the Timeline/Graph for meeting narration.
+  - Acceptance: one compact summary line mentions branch, selected specialties, tool failures/partials, and final disposition when available.
+- [ ] Add a Graph filter preset for meeting narration.
+  - Acceptance: one click can show "Agents only", "Agents + selected tools", and "All branches/tools".
+- [ ] Keep splitting large frontend code into focused components if `App.vue` starts growing again.
+  - Acceptance: any new workflow-summary UI lives outside `App.vue`; `App.vue` stays mostly orchestration state.
+
+### P2: Test and documentation cleanup
+
+- [ ] Clean or ignore generated build artifacts before commit review.
+  - Acceptance: `git status --short` separates source changes from `.idea`, `target`, `dist`, `__pycache__`, and temporary outputs.
+- [ ] Fix or rewrite the mojibake sections in this TODO after the new top section is stable.
+  - Acceptance: TODO is readable in PowerShell and editor; old completed information is not lost.
+- [ ] Add a short "manual demo script" section to `docs/CURRENT_DEMO_GUIDE.md`.
+  - Acceptance: tomorrow's meeting can be run from the guide without searching chat history.
+
 ## 2026-06-23 completed in current pass
 
 - [x] Paused `LabAdvisorAgent` and `DiagnosticOrderAgent` in the current default workflow without deleting their implementations.

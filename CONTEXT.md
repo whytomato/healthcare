@@ -84,6 +84,10 @@ _Avoid_: Static doctor-name generation, frontend-only staff display, one prompt 
 A manual or automated demo scenario where multiple high-acuity patient encounters are submitted concurrently, causing emergency-room agents to compete for finite practitioner, room, monitor, and exam-scheduling capacity.
 _Avoid_: Mocked frontend-only stress test, raw HTTP benchmark, replacing the per-encounter agent workflow
 
+**Demo Capacity Reset**:
+A demo support action that returns constrained emergency-room staff and resource capacity to a known baseline after one or more surge scenarios, so repeated demos can be compared without stale capacity exhaustion.
+_Avoid_: Hiding failed workflow state, deleting clinical history, frontend-only refresh
+
 **Agent Handoff Timeline**:
 A chronological record of how hospital role agents complete work, make decisions, create handoffs, branch, run parallel consultations, and converge into downstream roles during a patient encounter.
 _Avoid_: Raw agent result list, execution path only
